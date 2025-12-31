@@ -333,12 +333,286 @@ for i, item_id in enumerate(target_items, 1):
             'Covariance': cov_val,
             'Is_Top5': rank <= 5
         })
-
 top_peers_df = pd.DataFrame(top_peers_data)
 top_peers_df.to_csv(os.path.join(RESULTS_DIR, 'step7_target_item_peers.csv'), index=False)
 print("\nSaved top peers for I1 and I2 to results folder.")
 
+# =============================================================================
+# Step 8 & 10: Project Users into Reduced Latent Space (Top-5 and Top-10)
+# =============================================================================
+
 print("\n" + "="*70)
-print("[SUCCESS] All steps completed! (Steps 1-7)")
+print("Step 8 & 10: Project Users into Reduced Latent Space")
 print("="*70)
 
+# Formula: UserVector_u = R'_u × W_k
+# Optimization: Only iterate over items the user actually rated (missing = 0)
+# UserVector_u[dim] = Sum_{j in Observed} (R_{u,j} - μ_j) × W_{j, dim}
+
+# Get item means as a dictionary for fast lookup
+item_means_dict = r_i.set_index('item')['r_i_bar'].to_dict()
+
+# Get all users from the dataset
+all_users = sorted(df['user'].unique().tolist())
+print(f"\nTotal users to project: {len(all_users):,}")
+
+# Create a mapping: user -> {item: rating}
+print("Building user-item rating lookup...")
+user_ratings = df.groupby('user').apply(
+    lambda x: dict(zip(x['item'], x['rating']))
+).to_dict()
+
+def project_user(user_id, W, all_items, item_means_dict, user_ratings):
+    """
+    Project a single user into the reduced latent space.
+    
+    Formula: UserVector_u[dim] = Sum_{j in Observed} (R_{u,j} - μ_j) × W_{j, dim}
+    
+    Args:
+        user_id: The user to project
+        W: The projection matrix (n_items x k)
+        all_items: List of all items (defines row order in W)
+        item_means_dict: Dictionary {item_id: mean}
+        user_ratings: Dictionary {user_id: {item_id: rating}}
+    
+    Returns:
+        np.array: User vector of size k
+    """
+    k = W.shape[1]  # Number of dimensions (5 or 10)
+    user_vector = np.zeros(k)
+    
+    if user_id not in user_ratings:
+        return user_vector
+    
+    # Only iterate over items the user actually rated
+    for item_id, rating in user_ratings[user_id].items():
+        if item_id in item_means_dict:
+            # Get item index in W
+            item_idx = all_items.index(item_id)
+            # Centered rating: R_{u,j} - μ_j
+            centered_rating = rating - item_means_dict[item_id]
+            # Add contribution to each dimension
+            user_vector += centered_rating * W[item_idx, :]
+    
+    return user_vector
+
+# Project all users using Top-5 PCs
+print("\nProjecting all users using Top-5 PCs...")
+user_vectors_top5 = {}
+for i, user_id in enumerate(all_users):
+    user_vectors_top5[user_id] = project_user(
+        user_id, W_top5, all_items, item_means_dict, user_ratings
+    )
+    if (i + 1) % 50000 == 0:
+        print(f"  Projected {i+1:,} users...")
+print(f"Projected all {len(all_users):,} users to 5-dimensional space.")
+
+# Project all users using Top-10 PCs
+print("\nProjecting all users using Top-10 PCs...")
+user_vectors_top10 = {}
+for i, user_id in enumerate(all_users):
+    user_vectors_top10[user_id] = project_user(
+        user_id, W_top10, all_items, item_means_dict, user_ratings
+    )
+    if (i + 1) % 50000 == 0:
+        print(f"  Projected {i+1:,} users...")
+print(f"Projected all {len(all_users):,} users to 10-dimensional space.")
+
+# Show sample projections for target users
+print("\n--- Sample User Projections (Target Users) ---")
+for i, user_id in enumerate(target_users, 1):
+    print(f"\nTarget User U{i} (User {user_id}):")
+    print(f"  Top-5 Vector:  {user_vectors_top5[user_id]}")
+    print(f"  Top-10 Vector: {user_vectors_top10[user_id]}")
+
+# Save Step 8 & 10 results
+print("\n[Saving Step 8 & 10 results...]")
+
+# Save user vectors for Top-5
+user_vectors_top5_df = pd.DataFrame(
+    [{'user': user, **{f'PC{j+1}': vec[j] for j in range(5)}} 
+     for user, vec in user_vectors_top5.items()]
+)
+user_vectors_top5_df.to_csv(os.path.join(RESULTS_DIR, 'step8_user_vectors_top5.csv'), index=False)
+
+# Save user vectors for Top-10
+user_vectors_top10_df = pd.DataFrame(
+    [{'user': user, **{f'PC{j+1}': vec[j] for j in range(10)}} 
+     for user, vec in user_vectors_top10.items()]
+)
+user_vectors_top10_df.to_csv(os.path.join(RESULTS_DIR, 'step10_user_vectors_top10.csv'), index=False)
+print("Saved user projection vectors to results folder.")
+
+# =============================================================================
+# Step 9 & 11: User Similarity and Rating Prediction
+# =============================================================================
+
+print("\n" + "="*70)
+print("Step 9 & 11: User Similarity and Rating Prediction")
+print("="*70)
+
+def cosine_similarity(vec_u, vec_v):
+    """
+    Calculate cosine similarity between two user vectors.
+    
+    Formula: Sim(u, v) = (UserVector_u · UserVector_v) / (||UserVector_u|| × ||UserVector_v||)
+    
+    Returns:
+        float: Cosine similarity in range [-1, 1]
+    """
+    norm_u = np.linalg.norm(vec_u)
+    norm_v = np.linalg.norm(vec_v)
+    
+    if norm_u == 0 or norm_v == 0:
+        return 0.0
+    
+    return np.dot(vec_u, vec_v) / (norm_u * norm_v)
+
+def predict_rating(target_user, target_item, user_vectors, item_means_dict, 
+                   user_ratings, n_neighbors=20):
+    """
+    Predict rating for a target user on a target item.
+    
+    Formula: r_hat_{u,i} = μ_i + (Sum_{v in N} Sim(u,v) × (R_{v,i} - μ_i)) / (Sum_{v in N} |Sim(u,v)|)
+    
+    Args:
+        target_user: The user for whom to predict
+        target_item: The item to predict rating for
+        user_vectors: Dictionary {user_id: user_vector}
+        item_means_dict: Dictionary {item_id: mean}
+        user_ratings: Dictionary {user_id: {item_id: rating}}
+        n_neighbors: Number of nearest neighbors to use
+    
+    Returns:
+        tuple: (predicted_rating, neighbors_used, neighbor_details)
+    """
+    target_vec = user_vectors[target_user]
+    item_mean = item_means_dict.get(target_item, 0)
+    
+    # Calculate similarity with all other users who rated the target item
+    similarities = []
+    for user_id, user_vec in user_vectors.items():
+        if user_id == target_user:
+            continue
+        # Check if this user rated the target item
+        if user_id in user_ratings and target_item in user_ratings[user_id]:
+            sim = cosine_similarity(target_vec, user_vec)
+            actual_rating = user_ratings[user_id][target_item]
+            similarities.append((user_id, sim, actual_rating))
+    
+    if not similarities:
+        # No neighbors found, return item mean
+        return item_mean, 0, []
+    
+    # Sort by similarity (descending) and take top N neighbors
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    top_neighbors = similarities[:n_neighbors]
+    
+    # Calculate weighted average
+    numerator = 0.0
+    denominator = 0.0
+    neighbor_details = []
+    
+    for user_id, sim, actual_rating in top_neighbors:
+        centered_rating = actual_rating - item_mean
+        numerator += sim * centered_rating
+        denominator += abs(sim)
+        neighbor_details.append({
+            'neighbor_user': user_id,
+            'similarity': sim,
+            'actual_rating': actual_rating,
+            'centered_rating': centered_rating
+        })
+    
+    if denominator == 0:
+        return item_mean, len(top_neighbors), neighbor_details
+    
+    predicted = item_mean + (numerator / denominator)
+    
+    # Clip to valid rating range [1, 5]
+    predicted = max(1.0, min(5.0, predicted))
+    
+    return predicted, len(top_neighbors), neighbor_details
+
+# Make predictions for target users on target items
+print("\n--- Rating Predictions for Target Users on Target Items ---")
+n_neighbors = 20  # Number of nearest neighbors
+
+prediction_results = []
+
+for k_value, user_vectors, label in [(5, user_vectors_top5, "Top-5 PCs"), 
+                                       (10, user_vectors_top10, "Top-10 PCs")]:
+    print(f"\n=== Using {label} ===")
+    
+    for u_idx, target_user in enumerate(target_users, 1):
+        print(f"\n--- Target User U{u_idx} (User {target_user}) ---")
+        
+        for i_idx, target_item in enumerate(target_items, 1):
+            # Check if user already rated this item
+            actual_rating = None
+            if target_user in user_ratings and target_item in user_ratings[target_user]:
+                actual_rating = user_ratings[target_user][target_item]
+            
+            predicted, n_used, neighbors = predict_rating(
+                target_user, target_item, user_vectors, 
+                item_means_dict, user_ratings, n_neighbors
+            )
+            
+            item_mean = item_means_dict.get(target_item, 0)
+            
+            print(f"\n  Item I{i_idx} (Item {target_item}):")
+            print(f"    Item Mean (μ_i): {item_mean:.4f}")
+            print(f"    Neighbors Used: {n_used}")
+            print(f"    Predicted Rating: {predicted:.4f}")
+            if actual_rating is not None:
+                print(f"    Actual Rating: {actual_rating}")
+                print(f"    Error: {abs(predicted - actual_rating):.4f}")
+            else:
+                print(f"    Actual Rating: N/A (user hasn't rated this item)")
+            
+            # Show top 5 neighbors for detail
+            if neighbors:
+                print(f"    Top 5 Neighbors:")
+                for n_info in neighbors[:5]:
+                    print(f"      User {n_info['neighbor_user']}: "
+                          f"Sim={n_info['similarity']:.4f}, "
+                          f"Rating={n_info['actual_rating']}, "
+                          f"Centered={n_info['centered_rating']:.4f}")
+            
+            prediction_results.append({
+                'PCs': k_value,
+                'PC_Label': label,
+                'Target_User': f'U{u_idx}',
+                'User_ID': target_user,
+                'Target_Item': f'I{i_idx}',
+                'Item_ID': target_item,
+                'Item_Mean': item_mean,
+                'Neighbors_Used': n_used,
+                'Predicted_Rating': predicted,
+                'Actual_Rating': actual_rating,
+                'Error': abs(predicted - actual_rating) if actual_rating else None
+            })
+
+# Save prediction results
+print("\n[Saving Step 9 & 11 results...]")
+predictions_df = pd.DataFrame(prediction_results)
+predictions_df.to_csv(os.path.join(RESULTS_DIR, 'step9_11_predictions.csv'), index=False)
+print("Saved prediction results to results folder.")
+
+# Summary table
+print("\n" + "="*70)
+print("PREDICTION SUMMARY")
+print("="*70)
+
+print("\n--- Rating Predictions Summary ---")
+print(f"{'PCs':<10} {'User':<8} {'Item':<8} {'Predicted':<12} {'Actual':<10} {'Error':<10}")
+print("-" * 58)
+for result in prediction_results:
+    actual_str = f"{result['Actual_Rating']}" if result['Actual_Rating'] else "N/A"
+    error_str = f"{result['Error']:.4f}" if result['Error'] else "N/A"
+    print(f"{result['PC_Label']:<10} {result['Target_User']:<8} {result['Target_Item']:<8} "
+          f"{result['Predicted_Rating']:<12.4f} {actual_str:<10} {error_str:<10}")
+
+print("\n" + "="*70)
+print("[SUCCESS] All steps completed! (Steps 1-11)")
+print("="*70)
