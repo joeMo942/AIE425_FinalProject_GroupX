@@ -82,3 +82,168 @@ def get_item_avg_ratings():
     if not os.path.exists(ITEM_AVG_RATINGS_PATH):
         raise FileNotFoundError(f"Item average ratings file not found at {ITEM_AVG_RATINGS_PATH}")
     return pd.read_csv(ITEM_AVG_RATINGS_PATH)
+
+
+def create_user_item_matrix(df, user_col='user', item_col='item', rating_col='rating'):
+    """
+    Creates a user-item rating matrix from the dataset.
+    
+    Args:
+        df: DataFrame containing user, item, and rating columns
+        user_col: Name of the user column
+        item_col: Name of the item column
+        rating_col: Name of the rating column
+    
+    Returns:
+        pd.DataFrame: User-item matrix with users as rows and items as columns
+    """
+    return df.pivot(index=user_col, columns=item_col, values=rating_col)
+
+
+def mean_fill_matrix(matrix):
+    """
+    Fills missing values in the matrix using column (item) means.
+    
+    For each column (item), calculates the mean of existing ratings
+    and replaces NaN values with that mean.
+    
+    Args:
+        matrix: User-item rating matrix with NaN for missing values
+    
+    Returns:
+        pd.DataFrame: Matrix with missing values filled using column means
+    """
+    import numpy as np
+    
+    # Convert to numpy for memory efficiency
+    values = matrix.values.copy()
+    
+    # Calculate mean for each column (item), ignoring NaN
+    col_means = np.nanmean(values, axis=0)
+    
+    # Find indices of NaN values
+    nan_indices = np.where(np.isnan(values))
+    
+    # Replace NaN with corresponding column mean
+    values[nan_indices] = np.take(col_means, nan_indices[1])
+    
+    # Create DataFrame with filled values
+    filled_matrix = pd.DataFrame(values, index=matrix.index, columns=matrix.columns)
+    return filled_matrix
+
+
+def compute_centered_ratings(df, item_means_df, item_col='item', rating_col='rating'):
+    """
+    Calculate centered ratings (actual rating - item mean) for each rating.
+    
+    Args:
+        df: DataFrame containing user, item, and rating columns
+        item_means_df: DataFrame with item and r_i_bar (item mean) columns
+        item_col: Name of the item column
+        rating_col: Name of the rating column
+    
+    Returns:
+        pd.DataFrame: Original df with additional 'centered_rating' column
+    """
+    # Create a mapping from item to its mean
+    item_mean_map = item_means_df.set_index('item')['r_i_bar'].to_dict()
+    
+    # Calculate centered rating for each row
+    df_centered = df.copy()
+    df_centered['item_mean'] = df_centered[item_col].map(item_mean_map)
+    df_centered['centered_rating'] = df_centered[rating_col] - df_centered['item_mean']
+    
+    return df_centered
+
+
+def compute_covariance_matrix_efficient(df, items_list, item_means_df, total_users, show_progress=True):
+    """
+    Compute covariance matrix for items memory-efficiently.
+    
+    Uses the optimization that mean-filled values contribute zero after centering.
+    Only users who rated BOTH items contribute to the covariance sum.
+    Divides by N (total users), not just common users count.
+    
+    Args:
+        df: DataFrame containing user, item, and rating columns
+        items_list: List of item IDs (can be all items or subset)
+        item_means_df: DataFrame with item and r_i_bar columns
+        total_users: Total number of users N in the dataset
+        show_progress: Whether to show progress updates
+    
+    Returns:
+        pd.DataFrame: Covariance matrix (n x n) for items
+    """
+    import numpy as np
+    from scipy import sparse
+    
+    # Create item mean mapping
+    item_mean_map = item_means_df.set_index('item')['r_i_bar'].to_dict()
+    
+    # Filter to only the items in items_list
+    df_filtered = df[df['item'].isin(items_list)].copy()
+    
+    # Add centered ratings
+    df_filtered['item_mean'] = df_filtered['item'].map(item_mean_map)
+    df_filtered['centered_rating'] = df_filtered['rating'] - df_filtered['item_mean']
+    
+    if show_progress:
+        print(f"Building user-item centered rating structure...")
+    
+    # Create item index mapping for matrix positions
+    item_to_idx = {item: idx for idx, item in enumerate(items_list)}
+    n_items = len(items_list)
+    
+    # Build user ratings dictionary more efficiently using groupby
+    user_ratings = {}
+    for user, group in df_filtered.groupby('user'):
+        user_ratings[user] = dict(zip(group['item'], group['centered_rating']))
+    
+    if show_progress:
+        print(f"Number of users with ratings: {len(user_ratings):,}")
+        print(f"Number of items: {n_items:,}")
+        print(f"Computing covariance matrix ({n_items} x {n_items})...")
+    
+    # Initialize covariance matrix using numpy
+    cov_matrix = np.zeros((n_items, n_items), dtype=np.float64)
+    
+    # For each user, add their contribution to the covariance matrix
+    # This is more efficient than iterating over all item pairs
+    user_count = 0
+    for user, ratings in user_ratings.items():
+        items_rated = list(ratings.keys())
+        n_rated = len(items_rated)
+        
+        # For each pair of items this user rated
+        for i in range(n_rated):
+            item_i = items_rated[i]
+            idx_i = item_to_idx[item_i]
+            centered_i = ratings[item_i]
+            
+            for j in range(i, n_rated):
+                item_j = items_rated[j]
+                idx_j = item_to_idx[item_j]
+                centered_j = ratings[item_j]
+                
+                # Add product to covariance sum
+                product = centered_i * centered_j
+                cov_matrix[idx_i, idx_j] += product
+                if i != j:
+                    cov_matrix[idx_j, idx_i] += product  # Symmetric
+        
+        user_count += 1
+        if show_progress and user_count % 50000 == 0:
+            print(f"  Processed {user_count:,} users...")
+    
+    # Divide by N-1 (sample covariance) to get covariance
+    cov_matrix /= (total_users - 1)
+    
+    if show_progress:
+        print(f"Covariance matrix computation complete!")
+    
+    # Create DataFrame with item labels
+    cov_df = pd.DataFrame(cov_matrix, index=items_list, columns=items_list)
+    cov_df.index.name = 'item'
+    
+    return cov_df
+
