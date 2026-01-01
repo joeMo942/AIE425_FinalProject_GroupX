@@ -1,0 +1,12 @@
+SVD Orthogonality Verification Results
+==================================================
+
+U^T*U = I Verification:
+  Frobenius norm deviation: 2.08e-13
+  Max element deviation: 1.67e-14
+  Is identity: True
+
+V^T*V = I Verification:
+  Frobenius norm deviation: 1.92e-13
+  Max element deviation: 6.66e-15
+  Is identity: True

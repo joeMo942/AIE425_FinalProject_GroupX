@@ -1,0 +1,20 @@
+SVD Rating Prediction Results
+==================================================
+
+Optimal k (latent factors): 100
+
+Predictions Summary:
+  Total predictions: 4
+  Missing ratings predicted: 4
+  Existing ratings (ground truth): 0
+
+Accuracy Metrics:
+  No ground truth available for accuracy calculation.
+
+==================================================
+Prediction Details:
+
+  User  27768 x Item  1333: Predicted=3.568, Ground Truth=N/A
+  User  27768 x Item  1162: Predicted=4.005, Ground Truth=N/A
+  User  16157 x Item  1333: Predicted=3.773, Ground Truth=N/A
+  User  16157 x Item  1162: Predicted=3.818, Ground Truth=N/A
