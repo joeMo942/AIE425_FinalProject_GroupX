@@ -1,0 +1,116 @@
+======================================================================
+PCA Mean-Filling Terminal Output
+======================================================================
+
+=== Predictions Using Top-10 PCs ===
+
+--- Target User U1 (User 134471) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Neighbors Used: 20
+    Predicted Rating: 3.55
+    Actual Rating: 3.69 (item mean)
+    Error: 0.14
+    Top 5 Neighbors:
+      User 69257: Sim=0.94, Rating=4, Centered=0.31
+      User 1642: Sim=0.93, Rating=4, Centered=0.31
+      User 53975: Sim=0.92, Rating=4, Centered=0.31
+      User 38082: Sim=0.92, Rating=3, Centered=-0.69
+      User 127105: Sim=0.92, Rating=3, Centered=-0.69
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Neighbors Used: 20
+    Predicted Rating: 3.25
+    Actual Rating: 3.74 (item mean)
+    Error: 0.49
+    Top 5 Neighbors:
+      User 83084: Sim=0.97, Rating=3, Centered=-0.74
+      User 10751: Sim=0.95, Rating=3, Centered=-0.74
+      User 23287: Sim=0.94, Rating=3, Centered=-0.74
+      User 622: Sim=0.93, Rating=2, Centered=-1.74
+      User 70730: Sim=0.93, Rating=4, Centered=0.26
+
+--- Target User U2 (User 27768) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Neighbors Used: 20
+    Predicted Rating: 3.2
+    Actual Rating: 3.69 (item mean)
+    Error: 0.5
+    Top 5 Neighbors:
+      User 39778: Sim=0.98, Rating=3, Centered=-0.69
+      User 42396: Sim=0.94, Rating=3, Centered=-0.69
+      User 11942: Sim=0.94, Rating=3, Centered=-0.69
+      User 1902: Sim=0.94, Rating=3, Centered=-0.69
+      User 47847: Sim=0.94, Rating=3, Centered=-0.69
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Neighbors Used: 20
+    Predicted Rating: 3.45
+    Actual Rating: 3.74 (item mean)
+    Error: 0.29
+    Top 5 Neighbors:
+      User 9072: Sim=0.97, Rating=3, Centered=-0.74
+      User 67272: Sim=0.95, Rating=3, Centered=-0.74
+      User 123520: Sim=0.94, Rating=3, Centered=-0.74
+      User 8551: Sim=0.94, Rating=3, Centered=-0.74
+      User 15710: Sim=0.93, Rating=5, Centered=1.26
+
+--- Target User U3 (User 16157) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Neighbors Used: 20
+    Predicted Rating: 3.25
+    Actual Rating: 3.69 (item mean)
+    Error: 0.45
+    Top 5 Neighbors:
+      User 71270: Sim=0.98, Rating=3, Centered=-0.69
+      User 73523: Sim=0.96, Rating=2, Centered=-1.69
+      User 78294: Sim=0.96, Rating=3, Centered=-0.69
+      User 23055: Sim=0.95, Rating=3, Centered=-0.69
+      User 98915: Sim=0.95, Rating=4, Centered=0.31
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Neighbors Used: 20
+    Predicted Rating: 3.3
+    Actual Rating: 3.74 (item mean)
+    Error: 0.44
+    Top 5 Neighbors:
+      User 14618: Sim=0.95, Rating=4, Centered=0.26
+      User 138289: Sim=0.94, Rating=2, Centered=-1.74
+      User 3713: Sim=0.94, Rating=4, Centered=0.26
+      User 105313: Sim=0.94, Rating=2, Centered=-1.74
+      User 3672: Sim=0.94, Rating=4, Centered=0.26
+
+[Saving Step 9 & 11 results...]
+Saved prediction results to results folder.
+
+======================================================================
+PREDICTION SUMMARY
+======================================================================
+
+--- Rating Predictions Summary ---
+PCs        User     Item     Predicted    Actual          Source       Error
+---------------------------------------------------------------------------
+Top-5 PCs  U1       I1       3.3          3.69            item_mean    0.39
+Top-5 PCs  U1       I2       3.1          3.74            item_mean    0.64
+Top-5 PCs  U2       I1       3.2          3.69            item_mean    0.49
+Top-5 PCs  U2       I2       3.35         3.74            item_mean    0.39
+Top-5 PCs  U3       I1       2.85         3.69            item_mean    0.84
+Top-5 PCs  U3       I2       3.45         3.74            item_mean    0.29
+Top-10 PCs U1       I1       3.55         3.69            item_mean    0.14
+Top-10 PCs U1       I2       3.25         3.74            item_mean    0.49
+Top-10 PCs U2       I1       3.2          3.69            item_mean    0.5
+Top-10 PCs U2       I2       3.45         3.74            item_mean    0.29
+Top-10 PCs U3       I1       3.25         3.69            item_mean    0.45
+Top-10 PCs U3       I2       3.3          3.74            item_mean    0.44
+
+======================================================================
+[SUCCESS] All steps completed! (Steps 1-11)
+======================================================================

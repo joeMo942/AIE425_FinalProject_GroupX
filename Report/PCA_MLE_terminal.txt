@@ -1,0 +1,129 @@
+======================================================================
+PCA MLE Terminal Output
+======================================================================
+
+Top-10 Scores: [ 4.95319186 -1.27312941  2.95258001  0.13255917 -0.48431409 -6.46257995
+  5.55760746  5.34869295 -8.80298775 -8.86300383]
+
+======================================================================
+Phase 4: Prediction via Reconstruction
+======================================================================
+
+=== Predictions Using Top-5 PCs ===
+
+--- Target User U1 (User 134471) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.69
+    Actual Rating: 3.69 (item mean)
+    Error: 0.0
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.74
+    Actual Rating: 3.74 (item mean)
+    Error: 0.0
+
+--- Target User U2 (User 27768) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.65
+    Actual Rating: 3.69 (item mean)
+    Error: 0.04
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.69
+    Actual Rating: 3.74 (item mean)
+    Error: 0.05
+
+--- Target User U3 (User 16157) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.65
+    Actual Rating: 3.69 (item mean)
+    Error: 0.04
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.67
+    Actual Rating: 3.74 (item mean)
+    Error: 0.07
+
+=== Predictions Using Top-10 PCs ===
+
+--- Target User U1 (User 134471) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.69
+    Actual Rating: 3.69 (item mean)
+    Error: 0.0
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.74
+    Actual Rating: 3.74 (item mean)
+    Error: 0.0
+
+--- Target User U2 (User 27768) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.66
+    Actual Rating: 3.69 (item mean)
+    Error: 0.03
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.71
+    Actual Rating: 3.74 (item mean)
+    Error: 0.03
+
+--- Target User U3 (User 16157) ---
+
+  Item I1 (Item 1333):
+    Item Mean: 3.69
+    Predicted Rating: 3.7
+    Actual Rating: 3.69 (item mean)
+    Error: 0.0
+
+  Item I2 (Item 1162):
+    Item Mean: 3.74
+    Predicted Rating: 3.75
+    Actual Rating: 3.74 (item mean)
+    Error: 0.02
+
+[Saving predictions...]
+[Saved] Prediction results.
+
+======================================================================
+PREDICTION SUMMARY (MLE Method)
+======================================================================
+
+PCs          User     Item     Predicted    Actual          Source       Error
+---------------------------------------------------------------------------
+Top-5 PCs    U1       I1       3.69         3.69            item_mean    0.0
+Top-5 PCs    U1       I2       3.74         3.74            item_mean    0.0
+Top-5 PCs    U2       I1       3.65         3.69            item_mean    0.04
+Top-5 PCs    U2       I2       3.69         3.74            item_mean    0.05
+Top-5 PCs    U3       I1       3.65         3.69            item_mean    0.04
+Top-5 PCs    U3       I2       3.67         3.74            item_mean    0.07
+Top-10 PCs   U1       I1       3.69         3.69            item_mean    0.0
+Top-10 PCs   U1       I2       3.74         3.74            item_mean    0.0
+Top-10 PCs   U2       I1       3.66         3.69            item_mean    0.03
+Top-10 PCs   U2       I2       3.71         3.74            item_mean    0.03
+Top-10 PCs   U3       I1       3.7          3.69            item_mean    0.0
+Top-10 PCs   U3       I2       3.75         3.74            item_mean    0.02
+
+======================================================================
+[SUCCESS] PCA MLE completed! (All phases)
+======================================================================
+
+--- Saved Files ---
+1. mle_covariance_matrix.csv - MLE covariance matrix
+2. mle_target_item_peers.csv - Top 5 & Top 10 peers for each target item
+3. mle_predictions.csv - Predictions for target items (Top-5 and Top-10)
