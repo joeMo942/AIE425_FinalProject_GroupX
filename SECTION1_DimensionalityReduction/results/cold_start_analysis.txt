@@ -1,0 +1,22 @@
+Cold-Start Analysis Results
+==================================================
+
+8.1 Cold-Start Simulation:
+  Number of cold-start users: 50
+  Average visible ratings: 13.2
+  Average hidden ratings: 50.9
+
+8.3 Performance Comparison:
+  Cold-Start MAE: 0.7764
+  Cold-Start RMSE: 1.0131
+  Warm-Start MAE: 0.4522
+  Warm-Start RMSE: 0.5589
+
+8.4 Mitigation Strategies:
+  baseline_svd: MAE=0.6995, RMSE=0.9745
+  hybrid_0.7: MAE=0.6160, RMSE=0.8303
+  hybrid_0.5: MAE=0.5727, RMSE=0.7570
+  hybrid_0.3: MAE=0.5411, RMSE=0.7088
+  popularity_only: MAE=0.5336, RMSE=0.6944
+
+  Best Strategy: popularity_only

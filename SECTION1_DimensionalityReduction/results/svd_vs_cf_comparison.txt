@@ -1,0 +1,39 @@
+SVD vs Collaborative Filtering Comparison
+==================================================
+
+Method Comparison:
+  SVD (Truncated) MAE: 0.4331
+  Assignment 1 CF MAE: 0.0723
+  Winner: CF (498.8% better)
+
+==================================================
+Per-Prediction Details:
+
+  User 27768 x Item 1333:
+    SVD Prediction: 3.6028
+    CF Prediction: 3.3828
+    Actual Rating: 3.2560
+    SVD Error: 0.3468
+    CF Error: 0.1268
+
+  User 27768 x Item 1162:
+    SVD Prediction: 3.5992
+    CF Prediction: 3.3436
+    Actual Rating: 3.2560
+    SVD Error: 0.3432
+    CF Error: 0.0877
+
+  User 16157 x Item 1333:
+    SVD Prediction: 3.5836
+    CF Prediction: 3.1648
+    Actual Rating: 3.0958
+    SVD Error: 0.4877
+    CF Error: 0.0690
+
+  User 16157 x Item 1162:
+    SVD Prediction: 3.6506
+    CF Prediction: 3.0899
+    Actual Rating: 3.0958
+    SVD Error: 0.5548
+    CF Error: 0.0059
+

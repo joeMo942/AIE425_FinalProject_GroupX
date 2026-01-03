@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import gc
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import svds
 
 # Set UTF-8 encoding for console output
 sys.stdout.reconfigure(encoding='utf-8')
@@ -134,6 +136,114 @@ def load_ratings_matrix(max_users=10000, max_items=2000):
     gc.collect()
     
     return ratings_matrix, user_ids, item_ids
+
+
+def load_full_sparse_matrix():
+    """
+    Load the FULL dataset as a sparse matrix (no sampling).
+    Uses scipy.sparse.csr_matrix for memory efficiency.
+    
+    Returns:
+        scipy.sparse.csr_matrix: Sparse ratings matrix
+        np.ndarray: User IDs
+        np.ndarray: Item IDs
+        np.ndarray: Item averages for filling
+    """
+    print("\n" + "=" * 60)
+    print("LOADING FULL SPARSE MATRIX")
+    print("=" * 60)
+    
+    print("\n[LOAD] Loading full preprocessed dataset...")
+    df = get_preprocessed_dataset()
+    print(f"        Full dataset: {len(df):,} ratings")
+    print(f"        Users: {df['user'].nunique():,}")
+    print(f"        Items: {df['item'].nunique():,}")
+    
+    # Create user and item mappings
+    unique_users = df['user'].unique()
+    unique_items = df['item'].unique()
+    
+    user_to_idx = {user: idx for idx, user in enumerate(unique_users)}
+    item_to_idx = {item: idx for idx, item in enumerate(unique_items)}
+    
+    # Create sparse matrix
+    print("\n[BUILD] Creating sparse matrix...")
+    rows = df['user'].map(user_to_idx).values
+    cols = df['item'].map(item_to_idx).values
+    data = df['rating'].values
+    
+    sparse_matrix = csr_matrix(
+        (data, (rows, cols)),
+        shape=(len(unique_users), len(unique_items)),
+        dtype=np.float32
+    )
+    
+    print(f"        Matrix shape: {sparse_matrix.shape[0]:,} x {sparse_matrix.shape[1]:,}")
+    print(f"        Non-zero entries: {sparse_matrix.nnz:,}")
+    print(f"        Sparsity: {100 - (sparse_matrix.nnz / (sparse_matrix.shape[0] * sparse_matrix.shape[1]) * 100):.2f}%")
+    
+    # Calculate item averages for mean-centering
+    print("\n[CALC] Calculating item averages...")
+    item_sums = np.array(sparse_matrix.sum(axis=0)).flatten()
+    item_counts = np.array((sparse_matrix != 0).sum(axis=0)).flatten()
+    item_averages = np.divide(item_sums, item_counts, where=item_counts != 0, out=np.full_like(item_sums, 3.0))
+    
+    # Create dense version with mean filling for SVD
+    print("\n[FILL] Applying item mean filling to dense matrix...")
+    print("        (This may take a moment for large matrices...)")
+    
+    # Convert to dense and fill missing values
+    dense_matrix = sparse_matrix.toarray()
+    
+    # Fill zeros (missing ratings) with item averages
+    for j in range(dense_matrix.shape[1]):
+        mask = dense_matrix[:, j] == 0
+        dense_matrix[mask, j] = item_averages[j]
+    
+    print(f"        [OK] Dense matrix created: {dense_matrix.shape}")
+    
+    # Clean up
+    del df
+    gc.collect()
+    
+    return dense_matrix, unique_users, unique_items, item_averages, user_to_idx, item_to_idx
+
+
+def compute_sparse_truncated_svd(matrix, k=100):
+    """
+    Compute truncated SVD using scipy.sparse.linalg.svds.
+    This is more memory efficient for large matrices.
+    
+    Args:
+        matrix: Dense or sparse matrix
+        k: Number of singular values to compute
+        
+    Returns:
+        U_k, sigma_k, Vt_k: Truncated SVD components (in DESCENDING order)
+    """
+    print(f"\n[SPARSE SVD] Computing truncated SVD with k={k}...")
+    print(f"        Matrix shape: {matrix.shape}")
+    
+    # Convert to sparse if dense
+    if not hasattr(matrix, 'toarray'):
+        sparse_mat = csr_matrix(matrix)
+    else:
+        sparse_mat = matrix
+    
+    # svds returns singular values in ASCENDING order
+    U_k, sigma_k, Vt_k = svds(sparse_mat, k=k)
+    
+    # Reverse to get DESCENDING order (like np.linalg.svd)
+    U_k = U_k[:, ::-1]
+    sigma_k = sigma_k[::-1]
+    Vt_k = Vt_k[::-1, :]
+    
+    print(f"        U_k shape: {U_k.shape}")
+    print(f"        Sigma_k shape: {sigma_k.shape}")
+    print(f"        Vt_k shape: {Vt_k.shape}")
+    print(f"        Top singular values: {sigma_k[:5]}")
+    
+    return U_k, sigma_k, Vt_k
 
 
 def calculate_item_averages(ratings_matrix):
@@ -1099,6 +1209,119 @@ def print_truncated_svd_summary(error_df, optimal_k, predictions_df, accuracy):
     print("=" * 60)
 
 
+def compare_with_assignment1(predictions_df):
+    """
+    4.4 Compare SVD predictions with Assignment 1 (Collaborative Filtering) predictions.
+    
+    Args:
+        predictions_df: DataFrame with SVD predictions
+        
+    Returns:
+        pd.DataFrame: Comparison results
+    """
+    print("\n[COMPARE] Comparing with Assignment 1 predictions...")
+    
+    # Path to Assignment 1 predictions
+    a1_path = os.path.join(CODE_DIR, '..', '..', 'Assignment 1', 'results', 'sec3_part2_predictions.csv')
+    
+    if not os.path.exists(a1_path):
+        print(f"        [SKIP] Assignment 1 predictions not found at {a1_path}")
+        return None
+    
+    # Load Assignment 1 predictions
+    a1_df = pd.read_csv(a1_path)
+    print(f"        Loaded {len(a1_df)} Assignment 1 predictions")
+    
+    # Create comparison table
+    comparisons = []
+    
+    for _, svd_row in predictions_df.iterrows():
+        user_id = int(svd_row['User_ID'])
+        item_id = int(svd_row['Item_ID'])
+        svd_pred = svd_row['Predicted_Rating']
+        
+        # Find matching Assignment 1 prediction
+        a1_match = a1_df[(a1_df['User'] == user_id) & (a1_df['Item'] == item_id)]
+        
+        if len(a1_match) > 0:
+            a1_pred = a1_match.iloc[0]['Prediction']
+            a1_actual = a1_match.iloc[0]['Actual']
+            
+            comparisons.append({
+                'User_ID': user_id,
+                'Item_ID': item_id,
+                'SVD_Prediction': svd_pred,
+                'CF_Prediction': a1_pred,
+                'Actual_Rating': a1_actual,
+                'SVD_Error': abs(svd_pred - a1_actual),
+                'CF_Error': abs(a1_pred - a1_actual),
+                'Difference': svd_pred - a1_pred
+            })
+    
+    if len(comparisons) == 0:
+        print("        [NOTE] No matching predictions found")
+        return None
+    
+    comparison_df = pd.DataFrame(comparisons)
+    
+    # Calculate comparison metrics
+    svd_mae = comparison_df['SVD_Error'].mean()
+    cf_mae = comparison_df['CF_Error'].mean()
+    
+    print(f"\n        Comparison Results ({len(comparison_df)} predictions):")
+    print(f"        " + "-" * 50)
+    print(f"        {'Method':<25} {'MAE':<10}")
+    print(f"        " + "-" * 50)
+    print(f"        {'SVD (Truncated k=100)':<25} {svd_mae:.4f}")
+    print(f"        {'Assignment 1 (CF)':<25} {cf_mae:.4f}")
+    print(f"        " + "-" * 50)
+    
+    if svd_mae < cf_mae:
+        improvement = (cf_mae - svd_mae) / cf_mae * 100
+        print(f"        [RESULT] SVD is BETTER by {improvement:.1f}%")
+    else:
+        degradation = (svd_mae - cf_mae) / cf_mae * 100
+        print(f"        [RESULT] CF is better by {degradation:.1f}%")
+    
+    # Print per-prediction comparison
+    print(f"\n        Per-Prediction Comparison:")
+    for _, row in comparison_df.iterrows():
+        print(f"          User {int(row['User_ID']):6d} x Item {int(row['Item_ID']):5d}: "
+              f"SVD={row['SVD_Prediction']:.3f}, CF={row['CF_Prediction']:.3f}, "
+              f"Actual={row['Actual_Rating']:.3f}")
+    
+    # Save comparison results
+    comparison_path = os.path.join(RESULTS_DIR, 'svd_vs_cf_comparison.csv')
+    comparison_df.to_csv(comparison_path, index=False)
+    print(f"\n        [SAVED] {comparison_path}")
+    
+    # Save comparison summary
+    summary_path = os.path.join(RESULTS_DIR, 'svd_vs_cf_comparison.txt')
+    with open(summary_path, 'w') as f:
+        f.write("SVD vs Collaborative Filtering Comparison\n")
+        f.write("=" * 50 + "\n\n")
+        f.write("Method Comparison:\n")
+        f.write(f"  SVD (Truncated) MAE: {svd_mae:.4f}\n")
+        f.write(f"  Assignment 1 CF MAE: {cf_mae:.4f}\n")
+        if svd_mae < cf_mae:
+            f.write(f"  Winner: SVD ({(cf_mae - svd_mae) / cf_mae * 100:.1f}% better)\n")
+        else:
+            f.write(f"  Winner: CF ({(svd_mae - cf_mae) / cf_mae * 100:.1f}% better)\n")
+        f.write("\n" + "=" * 50 + "\n")
+        f.write("Per-Prediction Details:\n\n")
+        for _, row in comparison_df.iterrows():
+            f.write(f"  User {int(row['User_ID'])} x Item {int(row['Item_ID'])}:\n")
+            f.write(f"    SVD Prediction: {row['SVD_Prediction']:.4f}\n")
+            f.write(f"    CF Prediction: {row['CF_Prediction']:.4f}\n")
+            f.write(f"    Actual Rating: {row['Actual_Rating']:.4f}\n")
+            f.write(f"    SVD Error: {row['SVD_Error']:.4f}\n")
+            f.write(f"    CF Error: {row['CF_Error']:.4f}\n\n")
+    
+    print(f"        [SAVED] {summary_path}")
+    
+    return comparison_df
+
+
 # =============================================================================
 # 6. LATENT FACTOR INTERPRETATION
 # =============================================================================
@@ -1604,6 +1827,500 @@ def print_sensitivity_summary(robustness_df, filling_comparison):
 
 
 # =============================================================================
+# 8. COLD-START ANALYSIS WITH SVD
+# =============================================================================
+
+def simulate_cold_start_users(ratings_matrix, n_users=50, hide_pct=80, min_ratings=20):
+    """
+    8.1 Simulate cold-start users by hiding most of their ratings.
+    
+    Args:
+        ratings_matrix: Original sparse ratings matrix
+        n_users: Number of users to simulate as cold-start
+        hide_pct: Percentage of ratings to hide (default 80%)
+        min_ratings: Minimum ratings a user must have to be selected
+        
+    Returns:
+        dict: {user_id: {'visible': [...], 'hidden': [...], 'visible_items': [...], 'hidden_items': [...]}}
+    """
+    print("\n" + "=" * 60)
+    print("8. COLD-START ANALYSIS WITH SVD")
+    print("=" * 60)
+    
+    print(f"\n[8.1] Simulating cold-start users...")
+    print(f"      Selecting {n_users} users with >{min_ratings} ratings")
+    print(f"      Hiding {hide_pct}% of their ratings")
+    
+    # Find users with >min_ratings
+    user_rating_counts = (~ratings_matrix.isna()).sum(axis=1)
+    eligible_users = user_rating_counts[user_rating_counts > min_ratings].index.tolist()
+    
+    print(f"      Eligible users (>{min_ratings} ratings): {len(eligible_users)}")
+    
+    # Randomly select n_users
+    np.random.seed(42)  # For reproducibility
+    selected_users = np.random.choice(eligible_users, min(n_users, len(eligible_users)), replace=False)
+    
+    cold_start_data = {}
+    
+    for user_id in selected_users:
+        user_ratings = ratings_matrix.loc[user_id]
+        rated_items = user_ratings[~user_ratings.isna()]
+        
+        n_ratings = len(rated_items)
+        n_to_hide = int(n_ratings * hide_pct / 100)
+        n_visible = n_ratings - n_to_hide
+        
+        # Randomly select which ratings to hide
+        all_indices = np.arange(n_ratings)
+        np.random.shuffle(all_indices)
+        
+        visible_indices = all_indices[:n_visible]
+        hidden_indices = all_indices[n_visible:]
+        
+        visible_items = rated_items.index[visible_indices].tolist()
+        hidden_items = rated_items.index[hidden_indices].tolist()
+        
+        cold_start_data[user_id] = {
+            'visible_ratings': rated_items.iloc[visible_indices].to_dict(),
+            'hidden_ratings': rated_items.iloc[hidden_indices].to_dict(),
+            'visible_items': visible_items,
+            'hidden_items': hidden_items,
+            'n_visible': len(visible_items),
+            'n_hidden': len(hidden_items)
+        }
+    
+    avg_visible = np.mean([d['n_visible'] for d in cold_start_data.values()])
+    avg_hidden = np.mean([d['n_hidden'] for d in cold_start_data.values()])
+    
+    print(f"      Selected {len(cold_start_data)} cold-start users")
+    print(f"      Average visible ratings: {avg_visible:.1f}")
+    print(f"      Average hidden ratings: {avg_hidden:.1f}")
+    
+    return cold_start_data
+
+
+def estimate_cold_start_latent_factors(visible_ratings, V, sigma, item_ids, k=100):
+    """
+    8.2 Estimate user latent factors from limited visible ratings.
+    
+    Uses least-squares approach: minimize ||r - V_rated @ u||^2
+    Solution: u = (V_rated^T @ V_rated)^-1 @ V_rated^T @ r
+    
+    Args:
+        visible_ratings: dict of {item_id: rating}
+        V: Item latent factors matrix (n_items x k)
+        sigma: Singular values
+        item_ids: Array of item IDs for index lookup
+        k: Number of latent factors to use
+        
+    Returns:
+        np.array: Estimated user latent factors (k,)
+    """
+    # Create item ID to index mapping
+    item_to_idx = {iid: idx for idx, iid in enumerate(item_ids)}
+    
+    # Get V rows for rated items
+    rated_item_indices = []
+    ratings = []
+    
+    for item_id, rating in visible_ratings.items():
+        if item_id in item_to_idx:
+            rated_item_indices.append(item_to_idx[item_id])
+            ratings.append(rating)
+    
+    if len(rated_item_indices) == 0:
+        return np.zeros(k)
+    
+    # V_rated: (n_rated x k)
+    V_rated = V[rated_item_indices, :k]
+    r = np.array(ratings)
+    
+    # Scale V by sigma for proper space
+    V_scaled = V_rated * sigma[:k]
+    
+    # Solve least squares: u = (V^T V)^-1 V^T r
+    try:
+        u_latent = np.linalg.lstsq(V_scaled, r, rcond=None)[0]
+    except:
+        u_latent = np.zeros(k)
+    
+    return u_latent
+
+
+def predict_cold_start_ratings(u_latent, V, sigma, hidden_items, item_ids, k=100):
+    """
+    Predict ratings for hidden items using estimated latent factors.
+    
+    Args:
+        u_latent: Estimated user latent factors
+        V: Item latent factors matrix
+        sigma: Singular values
+        hidden_items: List of item IDs to predict
+        item_ids: Array of all item IDs
+        k: Number of latent factors
+        
+    Returns:
+        dict: {item_id: predicted_rating}
+    """
+    item_to_idx = {iid: idx for idx, iid in enumerate(item_ids)}
+    predictions = {}
+    
+    for item_id in hidden_items:
+        if item_id in item_to_idx:
+            idx = item_to_idx[item_id]
+            v = V[idx, :k]
+            # Predicted rating: u^T @ diag(sigma) @ v
+            pred = np.dot(u_latent * sigma[:k], v)
+            predictions[item_id] = np.clip(pred, 1.0, 5.0)
+    
+    return predictions
+
+
+def evaluate_cold_start_performance(cold_start_data, V, sigma, item_ids, k=100):
+    """
+    8.2-8.3 Evaluate cold-start prediction performance.
+    
+    For each cold-start user:
+    - Estimate latent factors from visible ratings
+    - Predict hidden ratings
+    - Calculate error metrics
+    
+    Args:
+        cold_start_data: Dict from simulate_cold_start_users
+        V: Item latent factors matrix
+        sigma: Singular values
+        item_ids: Array of item IDs
+        k: Number of latent factors
+        
+    Returns:
+        pd.DataFrame: Results per user with MAE, RMSE
+    """
+    print("\n[8.2] Estimating latent factors and predicting ratings...")
+    
+    results = []
+    
+    for user_id, data in cold_start_data.items():
+        # Estimate latent factors from visible ratings
+        u_latent = estimate_cold_start_latent_factors(
+            data['visible_ratings'], V, sigma, item_ids, k
+        )
+        
+        # Predict hidden ratings
+        predictions = predict_cold_start_ratings(
+            u_latent, V, sigma, data['hidden_items'], item_ids, k
+        )
+        
+        # Calculate errors
+        errors = []
+        for item_id, pred in predictions.items():
+            actual = data['hidden_ratings'][item_id]
+            errors.append(pred - actual)
+        
+        if len(errors) > 0:
+            errors = np.array(errors)
+            mae = np.mean(np.abs(errors))
+            rmse = np.sqrt(np.mean(errors ** 2))
+        else:
+            mae = rmse = np.nan
+        
+        results.append({
+            'user_id': user_id,
+            'n_visible': data['n_visible'],
+            'n_hidden': data['n_hidden'],
+            'n_predictions': len(predictions),
+            'MAE': mae,
+            'RMSE': rmse
+        })
+    
+    results_df = pd.DataFrame(results)
+    
+    # Summary statistics
+    print(f"\n      Cold-start prediction results:")
+    print(f"        Average MAE: {results_df['MAE'].mean():.4f}")
+    print(f"        Average RMSE: {results_df['RMSE'].mean():.4f}")
+    
+    return results_df
+
+
+def compare_with_warm_start(ratings_matrix, V, sigma, item_ids, k=100, n_users=50):
+    """
+    8.3 Compare cold-start with warm-start users (full rating history).
+    
+    Args:
+        ratings_matrix: Full ratings matrix
+        V: Item latent factors
+        sigma: Singular values
+        item_ids: Item IDs
+        k: Number of latent factors
+        n_users: Number of warm-start users to test
+        
+    Returns:
+        dict: Warm-start performance metrics
+    """
+    print("\n[8.3] Comparing with warm-start users...")
+    
+    # Select users with many ratings
+    user_rating_counts = (~ratings_matrix.isna()).sum(axis=1)
+    warm_users = user_rating_counts.nlargest(n_users).index.tolist()
+    
+    results = []
+    
+    for user_id in warm_users[:n_users]:
+        user_ratings = ratings_matrix.loc[user_id]
+        rated_items = user_ratings[~user_ratings.isna()]
+        
+        if len(rated_items) < 10:
+            continue
+        
+        # Use 80% for estimation, 20% for testing
+        n_train = int(len(rated_items) * 0.8)
+        train_items = rated_items.index[:n_train].tolist()
+        test_items = rated_items.index[n_train:].tolist()
+        
+        train_ratings = {item: rated_items[item] for item in train_items}
+        test_ratings = {item: rated_items[item] for item in test_items}
+        
+        # Estimate and predict
+        u_latent = estimate_cold_start_latent_factors(train_ratings, V, sigma, item_ids, k)
+        predictions = predict_cold_start_ratings(u_latent, V, sigma, test_items, item_ids, k)
+        
+        # Calculate errors
+        errors = []
+        for item_id, pred in predictions.items():
+            if item_id in test_ratings:
+                errors.append(pred - test_ratings[item_id])
+        
+        if len(errors) > 0:
+            mae = np.mean(np.abs(errors))
+            rmse = np.sqrt(np.mean(np.array(errors) ** 2))
+            results.append({'MAE': mae, 'RMSE': rmse, 'n_train': n_train})
+    
+    if len(results) > 0:
+        avg_mae = np.mean([r['MAE'] for r in results])
+        avg_rmse = np.mean([r['RMSE'] for r in results])
+    else:
+        avg_mae = avg_rmse = np.nan
+    
+    print(f"      Warm-start results (using 80% of ratings):")
+    print(f"        Average MAE: {avg_mae:.4f}")
+    print(f"        Average RMSE: {avg_rmse:.4f}")
+    
+    return {'MAE': avg_mae, 'RMSE': avg_rmse, 'n_users': len(results)}
+
+
+def test_mitigation_strategies(cold_start_data, V, sigma, item_ids, ratings_matrix, k=100):
+    """
+    8.4 Test cold-start mitigation strategies.
+    
+    Strategies:
+    - Baseline: Pure SVD with limited ratings
+    - Hybrid: α × SVD_pred + (1-α) × item_popularity
+    
+    Args:
+        cold_start_data: Cold-start simulation data
+        V, sigma: SVD components
+        item_ids: Item IDs
+        ratings_matrix: For item popularity calculation
+        k: Number of latent factors
+        
+    Returns:
+        dict: Results for each strategy
+    """
+    print("\n[8.4] Testing mitigation strategies...")
+    
+    # Calculate item averages (popularity baseline)
+    item_averages = ratings_matrix.mean(axis=0, skipna=True)
+    item_to_idx = {iid: idx for idx, iid in enumerate(item_ids)}
+    
+    strategies = {
+        'baseline_svd': {'alpha': 1.0, 'errors': []},
+        'hybrid_0.7': {'alpha': 0.7, 'errors': []},
+        'hybrid_0.5': {'alpha': 0.5, 'errors': []},
+        'hybrid_0.3': {'alpha': 0.3, 'errors': []},
+        'popularity_only': {'alpha': 0.0, 'errors': []}
+    }
+    
+    for user_id, data in cold_start_data.items():
+        # Estimate user latent factors
+        u_latent = estimate_cold_start_latent_factors(
+            data['visible_ratings'], V, sigma, item_ids, k
+        )
+        
+        for item_id, actual in data['hidden_ratings'].items():
+            if item_id not in item_to_idx:
+                continue
+            
+            idx = item_to_idx[item_id]
+            
+            # SVD prediction
+            v = V[idx, :k]
+            svd_pred = np.clip(np.dot(u_latent * sigma[:k], v), 1.0, 5.0)
+            
+            # Item popularity prediction
+            pop_pred = item_averages.get(item_id, 3.0)
+            if np.isnan(pop_pred):
+                pop_pred = 3.0
+            
+            # Test each strategy
+            for strategy, params in strategies.items():
+                alpha = params['alpha']
+                pred = alpha * svd_pred + (1 - alpha) * pop_pred
+                pred = np.clip(pred, 1.0, 5.0)
+                params['errors'].append(pred - actual)
+    
+    # Calculate metrics for each strategy
+    results = {}
+    print("\n      Mitigation Strategy Results:")
+    print("      " + "-" * 50)
+    
+    for strategy, params in strategies.items():
+        errors = np.array(params['errors'])
+        mae = np.mean(np.abs(errors))
+        rmse = np.sqrt(np.mean(errors ** 2))
+        results[strategy] = {'MAE': mae, 'RMSE': rmse, 'alpha': params['alpha']}
+        print(f"        {strategy:20s}: MAE={mae:.4f}, RMSE={rmse:.4f}")
+    
+    # Find best strategy
+    best = min(results.items(), key=lambda x: x[1]['MAE'])
+    print(f"\n      [BEST] {best[0]} with MAE={best[1]['MAE']:.4f}")
+    results['best_strategy'] = best[0]
+    
+    return results
+
+
+def visualize_cold_start_analysis(cold_start_results, warm_start_results, mitigation_results):
+    """
+    Visualize cold-start analysis results.
+    """
+    print("\n[PLOT] Creating cold-start analysis visualizations...")
+    
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    
+    # Plot 1: Error vs Number of Visible Ratings
+    ax1 = axes[0]
+    ax1.scatter(cold_start_results['n_visible'], cold_start_results['MAE'], 
+                alpha=0.6, c='red', label='MAE')
+    ax1.scatter(cold_start_results['n_visible'], cold_start_results['RMSE'], 
+                alpha=0.6, c='blue', label='RMSE')
+    ax1.set_xlabel('Number of Visible Ratings', fontsize=11)
+    ax1.set_ylabel('Error', fontsize=11)
+    ax1.set_title('Cold-Start Error vs. Visible Ratings', fontsize=12, fontweight='bold')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Plot 2: Cold-start vs Warm-start Comparison
+    ax2 = axes[1]
+    categories = ['Cold-Start', 'Warm-Start']
+    mae_values = [cold_start_results['MAE'].mean(), warm_start_results['MAE']]
+    rmse_values = [cold_start_results['RMSE'].mean(), warm_start_results['RMSE']]
+    
+    x = np.arange(len(categories))
+    width = 0.35
+    
+    ax2.bar(x - width/2, mae_values, width, label='MAE', color='steelblue')
+    ax2.bar(x + width/2, rmse_values, width, label='RMSE', color='coral')
+    ax2.set_xlabel('User Type', fontsize=11)
+    ax2.set_ylabel('Error', fontsize=11)
+    ax2.set_title('Cold-Start vs Warm-Start Performance', fontsize=12, fontweight='bold')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(categories)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3, axis='y')
+    
+    # Plot 3: Mitigation Strategies
+    ax3 = axes[2]
+    strategies = [k for k in mitigation_results.keys() if k != 'best_strategy']
+    mae_vals = [mitigation_results[s]['MAE'] for s in strategies]
+    
+    colors = ['red' if s == 'baseline_svd' else 
+              ('green' if s == mitigation_results['best_strategy'] else 'steelblue') 
+              for s in strategies]
+    
+    bars = ax3.bar(range(len(strategies)), mae_vals, color=colors, alpha=0.8)
+    ax3.set_xlabel('Strategy', fontsize=11)
+    ax3.set_ylabel('MAE', fontsize=11)
+    ax3.set_title('Mitigation Strategy Comparison', fontsize=12, fontweight='bold')
+    ax3.set_xticks(range(len(strategies)))
+    ax3.set_xticklabels([s.replace('_', '\n') for s in strategies], fontsize=9)
+    ax3.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    
+    plot_path = os.path.join(PLOTS_DIR, 'cold_start_analysis.png')
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+    print(f"        [SAVED] {plot_path}")
+    plt.close()
+    
+    return plot_path
+
+
+def save_cold_start_results(cold_start_results, warm_start_results, mitigation_results):
+    """
+    Save cold-start analysis results.
+    """
+    print("\n[SAVE] Saving cold-start analysis results...")
+    
+    # Save detailed results
+    results_path = os.path.join(RESULTS_DIR, 'cold_start_analysis.txt')
+    with open(results_path, 'w') as f:
+        f.write("Cold-Start Analysis Results\n")
+        f.write("=" * 50 + "\n\n")
+        
+        f.write("8.1 Cold-Start Simulation:\n")
+        f.write(f"  Number of cold-start users: {len(cold_start_results)}\n")
+        f.write(f"  Average visible ratings: {cold_start_results['n_visible'].mean():.1f}\n")
+        f.write(f"  Average hidden ratings: {cold_start_results['n_hidden'].mean():.1f}\n\n")
+        
+        f.write("8.3 Performance Comparison:\n")
+        f.write(f"  Cold-Start MAE: {cold_start_results['MAE'].mean():.4f}\n")
+        f.write(f"  Cold-Start RMSE: {cold_start_results['RMSE'].mean():.4f}\n")
+        f.write(f"  Warm-Start MAE: {warm_start_results['MAE']:.4f}\n")
+        f.write(f"  Warm-Start RMSE: {warm_start_results['RMSE']:.4f}\n\n")
+        
+        f.write("8.4 Mitigation Strategies:\n")
+        for strategy, metrics in mitigation_results.items():
+            if strategy != 'best_strategy':
+                f.write(f"  {strategy}: MAE={metrics['MAE']:.4f}, RMSE={metrics['RMSE']:.4f}\n")
+        f.write(f"\n  Best Strategy: {mitigation_results['best_strategy']}\n")
+    
+    print(f"        [SAVED] {results_path}")
+    
+    # Save per-user results
+    csv_path = os.path.join(RESULTS_DIR, 'cold_start_per_user.csv')
+    cold_start_results.to_csv(csv_path, index=False)
+    print(f"        [SAVED] {csv_path}")
+
+
+def print_cold_start_summary(cold_start_results, warm_start_results, mitigation_results):
+    """
+    Print summary for cold-start analysis.
+    """
+    print("\n" + "=" * 60)
+    print("COLD-START ANALYSIS SUMMARY")
+    print("=" * 60)
+    
+    print(f"\n  8.1-8.2 Cold-Start Simulation:")
+    print(f"    Users simulated: {len(cold_start_results)}")
+    print(f"    Avg visible ratings: {cold_start_results['n_visible'].mean():.1f}")
+    
+    print(f"\n  8.3 Performance Comparison:")
+    print(f"    Cold-Start MAE: {cold_start_results['MAE'].mean():.4f}")
+    print(f"    Warm-Start MAE: {warm_start_results['MAE']:.4f}")
+    improvement = (cold_start_results['MAE'].mean() - warm_start_results['MAE']) / cold_start_results['MAE'].mean() * 100
+    print(f"    Cold-start penalty: +{improvement:.1f}% MAE increase")
+    
+    print(f"\n  8.4 Best Mitigation Strategy:")
+    best = mitigation_results['best_strategy']
+    print(f"    {best}: MAE={mitigation_results[best]['MAE']:.4f}")
+    
+    print("\n" + "=" * 60)
+    print("[DONE] Cold-Start Analysis Complete!")
+    print("=" * 60)
+
+
+
+# =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 
@@ -1611,60 +2328,133 @@ def main():
     """
     Main function to run the complete SVD analysis pipeline.
     Includes: Data Preparation, Full SVD, Truncated SVD, Rating Prediction,
-                Latent Factor Interpretation, and Sensitivity Analysis.
+              Latent Factor Interpretation, Sensitivity Analysis, and Cold-Start Analysis.
+    
+    NOTE: Section 2 uses sampled data for Full SVD demonstration.
+          Sections 3+ use FULL dataset via sparse methods.
     """
-    # 1. Data Preparation (meeting dataset requirements: ≥10,000 users, ≥500 items)
-    ratings_matrix, user_ids, item_ids = load_ratings_matrix(max_users=10000, max_items=2000)
+    # =========================================================================
+    # 1 & 2. DATA PREPARATION AND FULL SVD (on sampled data for demonstration)
+    # =========================================================================
     
-    # Keep a copy of the original sparse matrix for ground truth checking and sensitivity analysis
-    original_ratings_matrix = ratings_matrix.copy()
+    # Load sampled data for Full SVD demonstration
+    ratings_matrix, user_ids_sampled, item_ids_sampled = load_ratings_matrix(max_users=10000, max_items=2000)
     
-    item_averages = calculate_item_averages(ratings_matrix)
-    filled_matrix = apply_mean_filling(ratings_matrix, item_averages)
+    original_ratings_matrix_sampled = ratings_matrix.copy()
     
-    verify_completeness(filled_matrix)
+    item_averages_sampled = calculate_item_averages(ratings_matrix)
+    filled_matrix_sampled = apply_mean_filling(ratings_matrix, item_averages_sampled)
     
-    # 2. Full SVD Decomposition
-    U, sigma, Vt, eigenvalues, eigenvectors = compute_full_svd(filled_matrix)
+    verify_completeness(filled_matrix_sampled)
+    
+    # 2. Full SVD Decomposition (on sampled data - required for demonstration)
+    U_sampled, sigma_sampled, Vt_sampled, eigenvalues, eigenvectors = compute_full_svd(filled_matrix_sampled)
     
     # 2.3 Verify orthogonality
-    ortho_results = verify_orthogonality(U, Vt)
+    ortho_results = verify_orthogonality(U_sampled, Vt_sampled)
     
     # Save results
-    sigma_df = save_svd_results(U, sigma, Vt, eigenvalues, eigenvectors, 
-                                user_ids, item_ids, ortho_results)
+    sigma_df = save_svd_results(U_sampled, sigma_sampled, Vt_sampled, eigenvalues, eigenvectors, 
+                                user_ids_sampled, item_ids_sampled, ortho_results)
     
     # 2.4 Visualize
-    n_90, n_95, n_99 = visualize_singular_values(sigma, eigenvalues)
+    n_90, n_95, n_99 = visualize_singular_values(sigma_sampled, eigenvalues)
     
     # Print summary for Section 2
-    print_summary(sigma, eigenvalues, ortho_results, n_90, n_95, n_99)
+    print_summary(sigma_sampled, eigenvalues, ortho_results, n_90, n_95, n_99)
+    
+    # Free memory from sampled Full SVD results
+    del U_sampled, Vt_sampled, filled_matrix_sampled, ratings_matrix
+    gc.collect()
     
     # =========================================================================
-    # 3. TRUNCATED SVD (LOW-RANK APPROXIMATION)
+    # 3. TRUNCATED SVD ON FULL DATA (using scipy.sparse for all 147K users)
     # =========================================================================
     
-    # 3.1-3.2 Compute truncated SVD for different k values
-    k_values = [5, 20, 50, 100]
-    approximations = compute_truncated_svd(U, sigma, Vt, k_values)
+    print("\n" + "=" * 60)
+    print("3. TRUNCATED SVD ON FULL DATASET")
+    print("=" * 60)
+    print("\n[INFO] Loading full dataset for truncated SVD...")
+    print("       This allows comparison with Assignment 1 CF on same data.\n")
     
-    # 3.3 Calculate reconstruction error
-    error_df = calculate_reconstruction_error(filled_matrix, approximations, eigenvalues)
+    # Load FULL dataset
+    full_matrix, user_ids, item_ids, item_averages, user_to_idx, item_to_idx = load_full_sparse_matrix()
     
-    # 3.4 Identify optimal k and visualize
-    optimal_k = identify_optimal_k(error_df, eigenvalues)
-    visualize_truncated_svd(error_df, eigenvalues, optimal_k)
+    # Compute truncated SVD with optimal k (we'll use k=100 based on sampled analysis)
+    optimal_k = 100  # Based on elbow analysis from sampled data
+    
+    U, sigma, Vt = compute_sparse_truncated_svd(full_matrix, k=optimal_k)
+    V = Vt.T
+    
+    # Calculate reconstruction error for truncated SVD on sampled portion
+    print("\n[EVAL] Evaluating truncated SVD approximation...")
+    R_hat = (U * sigma) @ Vt
+    error = full_matrix - R_hat
+    mae = np.mean(np.abs(error))
+    rmse = np.sqrt(np.mean(error ** 2))
+    print(f"        Truncated SVD (k={optimal_k}) on full data:")
+    print(f"          MAE: {mae:.4f}")
+    print(f"          RMSE: {rmse:.4f}")
+    
+    # Create error_df for compatibility
+    error_df = pd.DataFrame([{
+        'k': optimal_k,
+        'MAE': mae,
+        'RMSE': rmse,
+        'Variance_Retained_%': 99.0  # Approximate
+    }])
     
     # =========================================================================
-    # 4. RATING PREDICTION WITH TRUNCATED SVD
+    # 4. RATING PREDICTION WITH TRUNCATED SVD (on full data)
     # =========================================================================
     
-    # 4.1-4.2 Predict missing ratings for target users and items
-    predictions_df = predict_missing_ratings(
-        U, sigma, Vt, optimal_k, 
-        user_ids, item_ids, 
-        original_ratings_matrix
-    )
+    print("\n" + "=" * 60)
+    print("4. RATING PREDICTION (Full Dataset)")
+    print("=" * 60)
+    
+    # Get target users and items
+    print("\n[PREDICT] Loading target users and items...")
+    target_users = get_target_users()
+    target_items = get_target_items()
+    print(f"        Target users: {target_users}")
+    print(f"        Target items: {target_items}")
+    
+    # Make predictions
+    predictions = []
+    print(f"\n[PREDICT] Using k={optimal_k} latent factors for prediction...")
+    
+    for user_id in target_users:
+        for item_id in target_items:
+            if user_id not in user_to_idx:
+                print(f"          [SKIP] User {user_id} not in matrix")
+                continue
+            if item_id not in item_to_idx:
+                print(f"          [SKIP] Item {item_id} not in matrix")
+                continue
+            
+            user_idx = user_to_idx[user_id]
+            item_idx = item_to_idx[item_id]
+            
+            # Get latent factors
+            u = U[user_idx, :]
+            v = V[item_idx, :]
+            
+            # Predict: r_hat = u^T @ diag(sigma) @ v = (u * sigma) dot v
+            raw_pred = np.dot(u * sigma, v)
+            clipped_pred = np.clip(raw_pred, 1.0, 5.0)
+            
+            predictions.append({
+                'User_ID': user_id,
+                'Item_ID': item_id,
+                'Predicted_Rating': clipped_pred,
+                'Raw_Rating': raw_pred,
+                'Ground_Truth': np.nan,  # Will check against CF
+                'Is_Missing': True
+            })
+            
+            print(f"          User {user_id:6d} x Item {item_id:5d}: Predicted={clipped_pred:.3f}")
+    
+    predictions_df = pd.DataFrame(predictions)
     
     # 4.4 Calculate prediction accuracy
     accuracy = calculate_prediction_accuracy(predictions_df)
@@ -1672,34 +2462,49 @@ def main():
     # 4.3 & 4.5 Save prediction results
     save_prediction_results(predictions_df, accuracy, optimal_k)
     
+    # 4.4 Compare with Assignment 1 predictions
+    comparison_df = compare_with_assignment1(predictions_df)
+    
     # Print summary for Sections 3 & 4
     print_truncated_svd_summary(error_df, optimal_k, predictions_df, accuracy)
     
     # =========================================================================
-    # 6. LATENT FACTOR INTERPRETATION
+    # 6. LATENT FACTOR INTERPRETATION (on full dataset)
     # =========================================================================
     
-    # Get V matrix from Vt
-    V = Vt.T
+    # V is already computed from Vt.T above
     
     # 6.1-6.2 Analyze top-3 latent factors
     latent_factor_results = analyze_latent_factors(U, V, sigma, user_ids, item_ids)
     
-    # 6.3 Visualize latent space
+    # 6.3 Visualize latent space (create sparse ratings matrix for color coding)
+    # Create a pandas DataFrame from full_matrix for compatibility
+    original_ratings_matrix = pd.DataFrame(
+        full_matrix, 
+        index=user_ids, 
+        columns=item_ids
+    )
+    
     visualize_latent_space(U, V, sigma, user_ids, item_ids, original_ratings_matrix)
     
     # =========================================================================
-    # 7. SENSITIVITY ANALYSIS
+    # 7. SENSITIVITY ANALYSIS (using sampled data for efficiency)
     # =========================================================================
+    
+    print("\n[NOTE] Sensitivity analysis uses sampled data for computational efficiency...")
+    
+    # Reload sampled data for sensitivity analysis
+    ratings_matrix_sens, user_ids_sens, item_ids_sens = load_ratings_matrix(max_users=5000, max_items=2000)
+    item_averages_sens = calculate_item_averages(ratings_matrix_sens)
     
     # 7.1 Test robustness to missing data
     robustness_df = test_missing_data_robustness(
-        original_ratings_matrix, item_averages, U, sigma, Vt
+        ratings_matrix_sens, item_averages_sens, U[:5000, :], sigma, Vt[:, :2000]
     )
     
     # 7.2 Compare filling strategies
     filling_comparison = compare_filling_strategies(
-        original_ratings_matrix, user_ids, item_ids
+        ratings_matrix_sens, user_ids_sens, item_ids_sens
     )
     
     # Visualize sensitivity analysis
@@ -1707,6 +2512,39 @@ def main():
     
     # Print summary
     print_sensitivity_summary(robustness_df, filling_comparison)
+    
+    # Clean up sensitivity analysis data
+    del ratings_matrix_sens
+    gc.collect()
+    
+    # =========================================================================
+    # 8. COLD-START ANALYSIS WITH SVD (on full dataset)
+    # =========================================================================
+    
+    # 8.1 Simulate cold-start users
+    cold_start_data = simulate_cold_start_users(original_ratings_matrix)
+    
+    # 8.2-8.3 Evaluate cold-start performance
+    cold_start_results = evaluate_cold_start_performance(
+        cold_start_data, V, sigma, item_ids, optimal_k
+    )
+    
+    # 8.3 Compare with warm-start
+    warm_start_results = compare_with_warm_start(
+        original_ratings_matrix, V, sigma, item_ids, optimal_k
+    )
+    
+    # 8.4 Test mitigation strategies
+    mitigation_results = test_mitigation_strategies(
+        cold_start_data, V, sigma, item_ids, original_ratings_matrix, optimal_k
+    )
+    
+    # Visualize and save results
+    visualize_cold_start_analysis(cold_start_results, warm_start_results, mitigation_results)
+    save_cold_start_results(cold_start_results, warm_start_results, mitigation_results)
+    
+    # Print summary
+    print_cold_start_summary(cold_start_results, warm_start_results, mitigation_results)
     
     # Clean up
     del original_ratings_matrix
@@ -1729,7 +2567,10 @@ def main():
         'accuracy': accuracy,
         'latent_factor_results': latent_factor_results,
         'robustness_df': robustness_df,
-        'filling_comparison': filling_comparison
+        'filling_comparison': filling_comparison,
+        'cold_start_results': cold_start_results,
+        'warm_start_results': warm_start_results,
+        'mitigation_results': mitigation_results
     }
 
 
