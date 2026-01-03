@@ -286,6 +286,10 @@ def recommend_for_user(user_id, user_profiles, item_data, similarity_matrix,
     Uses user profile to find similar items they haven't rated.
     Handles cold-start users by falling back to 'cold_start' profile.
     """
+    item_to_idx = item_data['item_to_idx']
+    idx_to_item = item_data['idx_to_item']
+    features = item_data['features']
+    
     is_cold_start = False
     if user_id not in user_profiles:
         if 'cold_start' in user_profiles:
