@@ -27,11 +27,24 @@ This document provides a comprehensive analysis of the `pca_mean_filling.py` imp
 - Missing values: 3,991 (49.08%)
 - I1 mean: 3.69, I2 mean: 3.74
 
+**Formula:**
+```
+μᵢ = (1/nᵢ) × Σ R_{u,i}  (for all users u who rated item i)
+
+R'_{u,i} = R_{u,i}  if observed
+R'_{u,i} = μᵢ      if missing
+```
+
 ### Step 3: Average Rating for Each Item
 - Uses pre-computed item means from r_i
 
 ### Step 4: Centered Ratings
 - Computes (rating - item_mean) for all 2,149,655 ratings
+
+**Formula:**
+```
+Centered_{u,i} = R_{u,i} - μᵢ
+```
 
 ### Step 5 & 6: Covariance Matrix
 - Computes covariance for each two items
@@ -39,11 +52,26 @@ This document provides a comprehensive analysis of the `pca_mean_filling.py` imp
 - Memory-efficient: only users who rated BOTH items contribute
 - Divides by N-1 (sample covariance)
 
+**Formula:**
+```
+Cov(i,j) = Σ (R_{u,i} - μᵢ)(R_{u,j} - μⱼ) / (N - 1)
+         for all users u who rated BOTH items i and j
+```
+
 ### Step 7: PCA Eigendecomposition + Top Peers
 - Computes eigenvalues/eigenvectors
 - Top-5 PCs explain 1.37% variance
 - Top-10 PCs explain 2.30% variance
 - Identifies top 5/10 peers for I1 and I2
+
+**Formula:**
+```
+Σ × W = W × Λ  (eigenvalue equation)
+
+Variance Explained = Σᵢ₌₁ᵏ λᵢ / Σᵢ₌₁ⁿ λᵢ × 100%
+
+Reconstructed Σ ≈ W × Λ × Wᵀ
+```
 
 ### Step 8 & 10: User Projection
 - Projects users to 5D and 10D latent space
@@ -53,6 +81,14 @@ This document provides a comprehensive analysis of the `pca_mean_filling.py` imp
 - Uses k-NN with cosine similarity in latent space
 - 20 nearest neighbors
 - Predicts ratings for target users on target items
+
+**Formula:**
+```
+cos(u, v) = (UserVector_u · UserVector_v) / (||UserVector_u|| × ||UserVector_v||)
+
+Predicted_{u,i} = μᵢ + Σᵥ (sim(u,v) × Centered_{v,i}) / Σᵥ |sim(u,v)|
+                 for v in k-nearest neighbors of u
+```
 
 ---
 

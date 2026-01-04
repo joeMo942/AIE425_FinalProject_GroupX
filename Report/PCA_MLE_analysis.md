@@ -27,7 +27,21 @@ This document provides a comprehensive analysis of the `pca_mle.py` implementati
 - Divides by `|Common(i,j)| - 1` (number of users who rated BOTH items minus 1)
 - If `|Common(i,j)| < 2`, sets `Cov(i,j) = 0`
 
+**Formula:**
+```
+Cov_MLE(i,j) = Σ_{u ∈ Common(i,j)} (R_{u,i} - μᵢ)(R_{u,j} - μⱼ) / (|Common(i,j)| - 1)
+
+where Common(i,j) = {users who rated BOTH items i and j}
+```
+
 **Output:** 11,123 × 11,123 covariance matrix
+
+**Covariance Values for Target Items:**
+| Metric | Value |
+|--------|-------|
+| Var(I1) | 0.557218 |
+| Var(I2) | 0.636872 |
+| Cov(I1, I2) | 0.134281 |
 
 ---
 
@@ -35,11 +49,42 @@ This document provides a comprehensive analysis of the `pca_mle.py` implementati
 
 Computes eigenvalues and eigenvectors of the MLE covariance matrix.
 
+**Top 10 Eigenvalues:**
+| PC | Eigenvalue |
+|----|------------|
+| λ₁ | 430.304627 |
+| λ₂ | 189.063894 |
+| λ₃ | 163.208304 |
+| λ₄ | 159.948145 |
+| λ₅ | 154.299303 |
+| λ₆ | 136.400185 |
+| λ₇ | 133.385840 |
+| λ₈ | 125.410466 |
+| λ₉ | 123.279958 |
+| λ₁₀ | 117.286493 |
+
+**Total Variance:** 7926.099340
+
+**Variance Explained:**
+| PCs | Variance Explained |
+|-----|-------------------|
+| Top-5 | 13.84% |
+| Top-10 | 21.86% |
+
 **Projection Matrices:**
 - W_top5: (11,123 × 5)
 - W_top10: (11,123 × 10)
 
 **Top Peers:** Determines top 5 and top 10 peers for I1 and I2
+
+**Formula:**
+```
+Σ_MLE × W = W × Λ  (eigenvalue equation)
+
+Variance Explained = Σᵢ₌₁ᵏ λᵢ / Σᵢ₌₁ⁿ λᵢ × 100%
+
+Reconstructed Σ ≈ W × Λ × Wᵀ
+```
 
 ---
 
@@ -52,6 +97,13 @@ Projects users into reduced latent space:
 - **Point 3:** Projects users to 5D space (Top-5 PCs)
 - **Point 5:** Projects users to 10D space (Top-10 PCs)
 
+**Formula:**
+```
+t_{u,p} = Σ_{j ∈ Observed(u)} (R_{u,j} - μⱼ) × W_{j,p}
+
+UserScore_u = [t_{u,1}, t_{u,2}, ..., t_{u,k}]
+```
+
 ---
 
 ### Phase 4 (Point 4 & 6): Rating Predictions
@@ -60,6 +112,16 @@ Projects users into reduced latent space:
 
 - **Point 4:** Predictions using Top-5 PCs
 - **Point 6:** Predictions using Top-10 PCs
+
+**Formula (Reconstruction):**
+```
+r̂_{u,i} = μᵢ + Σ_{p=1}^k (t_{u,p} × W_{i,p})
+
+where:
+- μᵢ = mean rating of item i
+- t_{u,p} = user u's score on principal component p
+- W_{i,p} = loading of item i on principal component p
+```
 
 ---
 
