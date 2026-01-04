@@ -46,16 +46,16 @@ except ImportError:
 # Configuration
 # ============================================================================
 DATA_DIR = Path(__file__).parent.parent / "data"
-OUTPUT_FILE = DATA_DIR / "streamer_metadata.csv"
+OUTPUT_FILE = DATA_DIR / "streamer_metadata_fixed.csv"
 CHECKPOINT_FILE = DATA_DIR / "scraper_checkpoint.json"
 FAILED_FILE = DATA_DIR / "failed_streamers.txt"
-STREAMERS_FILE = DATA_DIR / "top_2000_streamers.txt"  # Use top 2000 for faster scraping
+STREAMERS_FILE = DATA_DIR / "rescrape_list.txt"  # Targeted rescrape list
 
 # Scraping settings - increased delays for Cloudflare bypass
 REQUEST_DELAY_MIN = 5.0  # Minimum seconds between requests
 REQUEST_DELAY_MAX = 8.0  # Maximum seconds between requests
 PAGE_TIMEOUT = 30  # Seconds to wait for page load
-CHECKPOINT_INTERVAL = 50  # Save checkpoint every N streamers
+CHECKPOINT_INTERVAL = 1  # Save checkpoint every N streamers
 
 # Setup logging
 logging.basicConfig(
@@ -196,8 +196,12 @@ def fetch_games_from_games_page(driver: webdriver.Chrome, username: str) -> list
         time.sleep(random.uniform(5.0, 8.0))  # Same delay as main page for Cloudflare
         
         # Check for Cloudflare or error
-        if "Just a moment" in driver.page_source or "Page not found" in driver.page_source:
-            return []
+        if "Just a moment" in driver.page_source:
+             print(f"[BLOCKED] Cloudflare detected for {username}/games")
+             return []
+        if "Page not found" in driver.page_source:
+             print(f"[404] Page not found for {username}/games")
+             return []
         
         # Extract game names from the games table
         js_script = r"""
@@ -215,11 +219,11 @@ def fetch_games_from_games_page(driver: webdriver.Chrome, username: str) -> list
                     let text = link.textContent.replace(/[\n\t\r]/g, ' ').trim();
                     
                     // Filter out stats and generic links
-                    if (text && text.length > 2 && 
+                    if (text && text.length > 1 && 
                         !['Games', 'More', 'All', 'View', 'Console'].includes(text) && 
                         !text.includes('%') && 
                         !text.match(/^\d+/) && // Starts with number (e.g. 1.2K)
-                        !text.includes(' hrs') && 
+                        !text.includes(' hrs') && !text.includes(' hr') &&
                         !games.includes(text)) {
                         games.push(text);
                     }
@@ -229,7 +233,7 @@ def fetch_games_from_games_page(driver: webdriver.Chrome, username: str) -> list
                 const allLinks = document.querySelectorAll('a[href*="/games/"]');
                 allLinks.forEach(link => {
                     let text = link.textContent.replace(/[\n\t\r]/g, ' ').trim();
-                    if (text && text.length > 2 && 
+                    if (text && text.length > 1 && 
                         !['Games', 'More', 'All'].includes(text) && 
                         !text.match(/^\d+/) && 
                         !games.includes(text)) {
@@ -243,9 +247,23 @@ def fetch_games_from_games_page(driver: webdriver.Chrome, username: str) -> list
         """
         
         games = driver.execute_script(js_script)
+        if not games:
+             # Improved fallback: get images alt text from table
+             js_fallback = r"""
+             const games = [];
+             const imgs = document.querySelectorAll('table img');
+             imgs.forEach(img => {
+                 const t = img.getAttribute('original-title') || img.getAttribute('title') || img.alt;
+                 if (t && t.length > 2 && !games.includes(t)) games.push(t);
+             });
+             return games.slice(0,10);
+             """
+             games = driver.execute_script(js_fallback)
+             
         return games if games else []
-        
     except Exception as e:
+        print(f"[ERROR] Error fetching games page: {e}")
+        return []
         logger.debug(f"Error fetching games for {username}: {str(e)[:30]}")
         return []
 
@@ -269,10 +287,17 @@ def scrape_streamer(driver: webdriver.Chrome, username: str) -> Optional[Dict]:
         time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
         
         if "Page not found" in driver.page_source or "404" in driver.title:
+            print(f"[404] Page not found for {username}")
             return None
         
+        if "Just a moment" in driver.page_source:
+             print(f"[BLOCKED] Cloudflare detected for {username}")
+             return None
+             
+        print(f"[DEBUG] Main page loaded for {username}. Running JS...")
+        
         # Comprehensive JavaScript extraction
-        js_script = """
+        js_script = r"""
         return (function() {
             const result = {
                 rank: null,
@@ -296,8 +321,18 @@ def scrape_streamer(driver: webdriver.Chrome, username: str) -> Optional[Dict]:
             
             // Extract rank
             try {
-                const rankMatch = pageText.match(/Ranked\\s*#?\\s*([\\d,]+)/i);
-                if (rankMatch) result.rank = parseInt(rankMatch[1].replace(/,/g, ''));
+                // Method 1: Specific rank element (often #rank-spot or similar)
+                const rankEl = document.querySelector('#rank-spot, .rank-value');
+                if (rankEl) {
+                    const txt = rankEl.textContent.trim().replace(/,/g, '').replace('#','');
+                    if (txt) result.rank = parseInt(txt);
+                }
+                
+                // Method 2: Regex in text
+                if (!result.rank) {
+                    const rankMatch = pageText.match(/Ranked\s*#?\s*([\d,]+)/i);
+                    if (rankMatch) result.rank = parseInt(rankMatch[1].replace(/,/g, ''));
+                }
             } catch(e) {}
             
             // Extract language
@@ -306,9 +341,9 @@ def scrape_streamer(driver: webdriver.Chrome, username: str) -> Optional[Dict]:
                 if (langLink) result.language = langLink.textContent.trim();
             } catch(e) {}
             
-            // Extract type (personality, gaming, etc.) - from category badges or text
+            // Extract type (personality, gaming, etc.)
             try {
-                const typeMatch = pageText.match(/Type[:\\s]+(\\w+)/i);
+                const typeMatch = pageText.match(/Type[:\s]+(\w+)/i);
                 if (typeMatch) result.type = typeMatch[1];
                 // Also check for common types in page
                 if (pageText.includes('personality')) result.type = 'personality';
@@ -337,48 +372,84 @@ def scrape_streamer(driver: webdriver.Chrome, username: str) -> Optional[Dict]:
                 });
             } catch(e) {}
             
-            // Method 2: Parse from page text using regex patterns
+            // Method 2: Robust parsing for missing stats
             try {
-                // Total time streamed (hours)
-                const hoursMatch = pageText.match(/([\\d,]+)\\s*(?:total\\s*)?hours?\\s*(?:streamed|live)/i);
-                if (hoursMatch) result.total_time_streamed = parseInt(hoursMatch[1].replace(/,/g, ''));
+                const bodyText = document.body.innerText;
                 
-                // Total followers
-                const followersMatch = pageText.match(/([\\d,]+(?:\\.\\d+)?[KMB]?)\\s*(?:total\\s*)?followers/i);
-                if (followersMatch) {
-                    let val = followersMatch[1].replace(/,/g, '');
-                    if (val.includes('K')) result.total_followers = parseFloat(val) * 1000;
-                    else if (val.includes('M')) result.total_followers = parseFloat(val) * 1000000;
-                    else result.total_followers = parseInt(val);
+                // Helper to find value by label (DOM traversal)
+                function findStatValue(labelTrigger) {
+                   const xpath = `.//*[contains(text(), '${labelTrigger}')]`;
+                   const iterator = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
+                   let node = iterator.iterateNext();
+                   while (node) {
+                       // Check previous sibling
+                       if (node.previousElementSibling) {
+                           return node.previousElementSibling.textContent.trim();
+                       }
+                       // Check parent's previous sibling
+                       if (node.parentElement && node.parentElement.previousElementSibling) {
+                           return node.parentElement.previousElementSibling.textContent.trim();
+                       }
+                       node = iterator.iterateNext();
+                   }
+                   return null;
+                }
+
+                // Total Followers (often has rank prefix like #3 ... 19M)
+                const tfVal = findStatValue('Total followers');
+                if (tfVal) {
+                    // Clean "#3 19,261,130" -> "19261130"
+                    const cleanVal = tfVal.split('\n').pop().trim().replace(/,/g, '');
+                    if (cleanVal.match(/^\d+$/)) result.total_followers = parseInt(cleanVal);
+                }
+
+                // Total Time Streamed
+                const ttVal = findStatValue('Total hours streamed');
+                if (ttVal) {
+                    const cleanVal = ttVal.replace(/,/g, '');
+                    if (cleanVal.match(/^\d+$/)) result.total_time_streamed = parseInt(cleanVal);
                 }
                 
-                // Total views
-                const viewsMatch = pageText.match(/([\\d,]+(?:\\.\\d+)?[KMB]?)\\s*(?:total\\s*)?views/i);
-                if (viewsMatch) {
-                    let val = viewsMatch[1].replace(/,/g, '');
-                    if (val.includes('K')) result.total_views = parseFloat(val) * 1000;
-                    else if (val.includes('M')) result.total_views = parseFloat(val) * 1000000;
-                    else result.total_views = parseInt(val);
+                // Total Games Streamed
+                const tgsVal = findStatValue('Total games streamed');
+                if (tgsVal) {
+                    const cleanVal = tgsVal.replace(/,/g, '');
+                    if (cleanVal.match(/^\d+$/)) result.total_games_streamed = parseInt(cleanVal);
                 }
                 
-                // Games streamed count
-                const gamesMatch = pageText.match(/([\\d,]+)\\s*(?:total\\s*)?games?\\s*(?:streamed|played)/i);
-                if (gamesMatch) result.total_games_streamed = parseInt(gamesMatch[1].replace(/,/g, ''));
+                // Duration & Active Days (Regex on body text is reliable for these)
+                if (!result.avg_stream_duration) {
+                     const durMatch = bodyText.match(/Duration\s+([\d\.]+)\s*hrs/i);
+                     if (durMatch) result.avg_stream_duration = parseFloat(durMatch[1]);
+                }
                 
-                // Average viewers (backup)
+                if (!result.active_days_per_week) {
+                     const daysMatch = bodyText.match(/Active days per week\s+(\d+)/i);
+                     if (daysMatch) result.active_days_per_week = parseInt(daysMatch[1]);
+                }
+                
+                // Fallback for Avg Viewers (if not found by specific selector earlier)
                 if (!result.avg_viewers) {
-                    const avgMatch = pageText.match(/([\\d,]+)\\s*average\\s*viewers/i);
-                    if (avgMatch) result.avg_viewers = parseInt(avgMatch[1].replace(/,/g, ''));
+                     // Pattern 1: Number before text (7,818 Average viewers)
+                     const avgMatch1 = bodyText.match(/([\d,]+)\s*average\s*viewers/i);
+                     if (avgMatch1) result.avg_viewers = parseInt(avgMatch1[1].replace(/,/g, ''));
+                     
+                     // Pattern 2: Text before number (Avg viewers ● 7,220)
+                     if (!result.avg_viewers) {
+                        const avgMatch2 = bodyText.match(/Avg\.*\s*viewers\s*[●\-\:]?\s*([\d,]+)/i);
+                        if (avgMatch2) result.avg_viewers = parseInt(avgMatch2[1].replace(/,/g, ''));
+                     }
                 }
                 
-                // Days of week detection
+                 // Days of week detection
                 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
                 days.forEach(day => {
-                    if (pageText.includes('most active') && pageText.includes(day)) {
+                    if (bodyText.includes('most active') && bodyText.includes(day)) {
                         result.most_active_day = day;
                     }
                 });
-            } catch(e) {}
+
+            } catch(e) { console.error("Stats extraction error:", e); }
             
             // Extract games from data-original-title on images
             // Extract games from images or links
@@ -440,31 +511,27 @@ def scrape_streamer(driver: webdriver.Chrome, username: str) -> Optional[Dict]:
         print(f"[INFO] Navigating to games page for {username}...")
         games_from_page = fetch_games_from_games_page(driver, username)
         if games_from_page:
-            # Merge: prefer games page data, then main page
-            for game in games_from_page:
-                if game not in games_list:
-                    games_list.insert(0, game)
+            # Merge: prefer games page data (which is sorted by time/rank)
+            # Remove any duplicates from main page list that are in games page list
+            games_list = [g for g in games_list if g not in games_from_page]
+            # Prepend the sorted games page list
+            games_list = games_from_page + games_list
+        
         games_list = games_list[:5]  # Keep top 5
         
-        # Build result matching datasetV2.csv columns
+        # Build result matching datasetV2.csv columns (Modified: removed unused fields)
         result = {
             'RANK': data.get('rank'),
             'NAME': username,
             'LANGUAGE': data.get('language', ''),
-            'TYPE': data.get('type', 'personality'),
             'MOST_STREAMED_GAME': games_list[0] if len(games_list) > 0 else '',
             '2ND_MOST_STREAMED_GAME': games_list[1] if len(games_list) > 1 else '',
             'AVERAGE_STREAM_DURATION': data.get('avg_stream_duration'),
-            'FOLLOWERS_GAINED_PER_STREAM': data.get('followers_gained_per_stream'),
             'AVG_VIEWERS_PER_STREAM': data.get('avg_viewers'),
-            'AVG_GAMES_PER_STREAM': data.get('avg_games_per_stream'),
             'TOTAL_TIME_STREAMED': data.get('total_time_streamed'),
             'TOTAL_FOLLOWERS': data.get('total_followers'),
-            'TOTAL_VIEWS': data.get('total_views'),
             'TOTAL_GAMES_STREAMED': data.get('total_games_streamed'),
             'ACTIVE_DAYS_PER_WEEK': data.get('active_days_per_week'),
-            'MOST_ACTIVE_DAY': data.get('most_active_day', ''),
-            'DAY_WITH_MOST_FOLLOWERS_GAINED': data.get('day_most_followers', ''),
         }
         
         return result
@@ -569,12 +636,12 @@ def main():
         # print("[INIT] Logging into TwitchTracker...")
         # login_to_twitchtracker(driver)
         
-        print("[INIT] Starting scraping (TEST MODE: first 10)...")
+        print("[INIT] Starting FULL scraping...")
         print("[INIT] WebDriver ready!\n")
         
-        # Limit to 10 for testing
-        test_limit = 10
-        remaining = remaining[:test_limit]
+        # FULL RUN (No limit)
+        # test_limit = 10
+        # remaining = remaining[:test_limit]
         
         for i, username in enumerate(remaining):
             # Scrape

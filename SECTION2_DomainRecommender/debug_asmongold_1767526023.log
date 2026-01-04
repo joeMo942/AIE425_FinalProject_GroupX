@@ -1,0 +1,85 @@
+13:27:08 [INFO] patching driver executable /home/yousef/.local/share/undetected_chromedriver/undetected_chromedriver
+Debugging Missing Stats Extraction...
+Navigating to asmongold...
+
+=== PAGE TEXT (First 1000 chars) ===
+TwitchTracker
+Time zone
+UTC+2
+ LOG IN
+ SEARCH
+Channels
+Games
+Clips
+Stats 
+Subscribers
+Discover more
+Streaming media
+Social media marketing services
+Livestream viewer tracking
+Affiliate marketing Twitch
+Webcams for streaming
+Twitch drops information
+Watch time analysis
+Gaming peripherals keyboards mice
+Best video game consoles
+GAMES
+asmongold:26261471
+ASMONGOLD
+Overview
+Streams
+Games
+Subs
+Statistics
+Clips
+PERFORMANCE SUMMARY
+7 DAYS 30 DAYS 3 MONTHS ALL TIME
+No streams for selected period
+LIFETIME OVERVIEW
+8,136
+Total hours streamed
+#40 448,161
+Highest number of viewers
+Jun 1, 2022
+#89 3,430,739
+Total followers
+48
+Total games streamed
+SUBSCRIBERS
+DETAILS
+33
+Current active subs
+4
+Paid active subs
+0
+Gifted active subs
+48,786
+All-time high active subs
+CHANNEL PERFORMANCE OVER TIME
+TwitchTracker.com
+Avg Viewers
+Max Viewers
+Hours Streamed
+Followers Gain
+Jan '17
+Jul '17
+Jan '18
+Jul '18
+Jan '19
+Jul '19
+Jan '20
+Jul '20
+Jan '21
+Jul '21
+Jan '22
+Jul '22
+Jan '23
+Jul '23
+0
+40k
+80k
+120k
+RECENT STREAMS
+
+=== RANK DEBUG RESULTS ===
+{'rank_regex': 'NULL', 'rank_spot': 'NULL', 'rank_value': 'NULL'}
