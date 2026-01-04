@@ -34,6 +34,9 @@ Cov_MLE(i,j) = Σ_{u ∈ Common(i,j)} (R_{u,i} - μᵢ)(R_{u,j} - μⱼ) / (|Com
 where Common(i,j) = {users who rated BOTH items i and j}
 ```
 
+**LaTeX:**
+$$Cov_{MLE}(i,j) = \frac{\sum_{u \in Common(i,j)} (R_{u,i} - \mu_i)(R_{u,j} - \mu_j)}{|Common(i,j)| - 1}$$
+
 **Output:** 11,123 × 11,123 covariance matrix
 
 **Covariance Values for Target Items:**
@@ -86,6 +89,13 @@ Variance Explained = Σᵢ₌₁ᵏ λᵢ / Σᵢ₌₁ⁿ λᵢ × 100%
 Reconstructed Σ ≈ W × Λ × Wᵀ
 ```
 
+**LaTeX:**
+$$\Sigma_{MLE} W = W \Lambda$$
+
+$$\text{Variance Explained} = \frac{\sum_{i=1}^{k} \lambda_i}{\sum_{i=1}^{n} \lambda_i} \times 100\%$$
+
+$$\hat{\Sigma} \approx W \Lambda W^T$$
+
 ---
 
 ### Phase 3 (Point 3 & 5): Reduced Dimensional Space
@@ -103,6 +113,9 @@ t_{u,p} = Σ_{j ∈ Observed(u)} (R_{u,j} - μⱼ) × W_{j,p}
 
 UserScore_u = [t_{u,1}, t_{u,2}, ..., t_{u,k}]
 ```
+
+**LaTeX:**
+$$t_{u,p} = \sum_{j \in Obs(u)} (R_{u,j} - \mu_j) \times W_{j,p}$$
 
 ---
 
@@ -122,6 +135,9 @@ where:
 - t_{u,p} = user u's score on principal component p
 - W_{i,p} = loading of item i on principal component p
 ```
+
+**LaTeX:**
+$$\hat{R}_{u,i} = \mu_i + \sum_{p=1}^{k} (t_{u,p} \times W_{i,p})$$
 
 ---
 
