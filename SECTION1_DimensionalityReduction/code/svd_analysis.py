@@ -2848,24 +2848,72 @@ def main():
           Visualization uses sampling only for rendering purposes.
     """
     # =========================================================================
-    # 1. DATA PREPARATION - LOAD FULL DATASET
+    # 1. DATA PREPARATION - LOAD SAMPLED DATA FOR FULL SVD
     # =========================================================================
     
     print("=" * 70)
-    print("SVD ANALYSIS ON FULL DATASET")
+    print("SVD ANALYSIS")
     print("=" * 70)
-    print("\n[INFO] All analyses will be performed on the FULL dataset.")
-    print("       This ensures consistency with CF predictions from Assignment 1.\n")
+    print("\n[INFO] Section 2 (Full SVD): Uses sampled data (5K users × 2K items).")
+    print("       Sections 3-8 (Truncated SVD): Use FULL sparse dataset.\n")
+    
+    # =========================================================================
+    # 2. FULL SVD DECOMPOSITION (on SAMPLED data for demonstration)
+    # =========================================================================
+    
+    print("\n" + "=" * 60)
+    print("2. FULL SVD DECOMPOSITION (Sampled Data)")
+    print("=" * 60)
+    print("\n[INFO] Full SVD requires dense matrix - using sampled subset.")
+    print("       Sample: 5,000 users × 2,000 items for demonstration.\n")
+    
+    # 2.1 Load sampled data for Full SVD
+    ratings_matrix, sample_user_ids, sample_item_ids = load_ratings_matrix(max_users=5000, max_items=2000)
+    
+    # 2.2 Calculate item averages (r_i)
+    item_averages = calculate_item_averages(ratings_matrix)
+    
+    # 2.3 Apply mean-filling for dense matrix
+    filled_matrix = apply_mean_filling(ratings_matrix, item_averages)
+    
+    # 2.4 Verify completeness
+    verify_completeness(filled_matrix)
+    
+    # 2.1-2.2 Compute FULL SVD: R = U * Sigma * Vt
+    print("\n[FULL SVD] Computing full SVD decomposition...")
+    U_full, sigma_full, Vt_full, eigenvalues_full, eigenvectors_full = compute_full_svd(filled_matrix)
+    
+    # 2.3 Verify orthogonality
+    ortho_results_full = verify_orthogonality(U_full, Vt_full)
+    
+    # Save Full SVD results
+    save_svd_results(U_full, sigma_full, Vt_full, eigenvalues_full, eigenvectors_full, 
+                     sample_user_ids, sample_item_ids, ortho_results_full)
+    
+    # 2.4 Visualize singular values
+    n_90_full, n_95_full, n_99_full = visualize_singular_values(sigma_full, eigenvalues_full)
+    
+    # Print Full SVD summary
+    print_summary(sigma_full, eigenvalues_full, ortho_results_full, n_90_full, n_95_full, n_99_full)
+    
+    # Clean up to free memory
+    print("\n[CLEANUP] Freeing memory from Full SVD...")
+    del U_full, Vt_full, filled_matrix, ratings_matrix
+    gc.collect()
+    
+    # =========================================================================
+    # LOAD FULL DATASET FOR REMAINING SECTIONS (3-8)
+    # =========================================================================
     
     # Load FULL dataset (mean-centered sparse matrix)
     sparse_matrix, user_ids, item_ids, global_mean, user_to_idx, item_to_idx, item_means = load_full_sparse_matrix()
     
     # =========================================================================
-    # 2. FULL SVD PROPERTIES DEMONSTRATION (using truncated SVD on full data)
+    # 3. TRUNCATED SVD ON FULL DATASET
     # =========================================================================
     
     print("\n" + "=" * 60)
-    print("2. SVD DECOMPOSITION ON FULL DATASET")
+    print("3. TRUNCATED SVD ON FULL DATASET")
     print("=" * 60)
     print("\n[INFO] Using truncated SVD (k=100) on full sparse matrix.")
     print("       Full SVD is computationally infeasible for 147K users.\n")

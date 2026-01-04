@@ -15,7 +15,7 @@ Method Comparison:
 Per-Prediction Details:
 
   User 134471 x Item 1333 (Cluster 0):
-    SVD Prediction: 3.8016
+    SVD Prediction: 3.8017
     CF Prediction:  3.4343
     Actual Rating:  3.5455
     SVD Error:      0.2562
@@ -29,7 +29,7 @@ Per-Prediction Details:
     CF Error:       0.0000
 
   User 27768 x Item 1333 (Cluster 2):
-    SVD Prediction: 3.8553
+    SVD Prediction: 3.8554
     CF Prediction:  3.3828
     Actual Rating:  3.2560
     SVD Error:      0.5994
