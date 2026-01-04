@@ -11,3 +11,5 @@ SECTION2_DomainRecommender/results/svd_predictions.npy
 !Report/PCA_meanfill_terminal.txt
 !Report/PCA_MLE_terminal.txt
 !Report/SVD_terminal_output.txt
+!Report/SVD_conclusion.md
+!Report/SVD_analysis.md
