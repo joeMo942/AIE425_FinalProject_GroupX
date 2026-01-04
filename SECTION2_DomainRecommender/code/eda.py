@@ -1,9 +1,6 @@
 """
 Exploratory Data Analysis (EDA)
 ===============================
-Team Members:
-- [Add your names and IDs here]
-
 Performs exploratory analysis for Part 1 of the assignment:
 - Rating distribution
 - User activity distribution (long-tail)

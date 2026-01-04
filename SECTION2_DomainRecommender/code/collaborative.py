@@ -1,9 +1,6 @@
 """
 Collaborative Filtering Recommendation System
 ==============================================
-Team Members:
-- [Add your names and IDs here]
-
 Implements User-Based Collaborative Filtering using:
 - User-Item rating matrix
 - Cosine similarity for user similarity

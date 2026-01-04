@@ -1,8 +1,6 @@
 """
 Content-Based Recommendation System
 ====================================
-Team Members:
-- [Add your names and IDs here]
 
 Implements content-based filtering using:
 - TF-IDF for text feature extraction
