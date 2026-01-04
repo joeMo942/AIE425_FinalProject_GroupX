@@ -13,20 +13,11 @@ I1 (Item 1333): μ = 3.694656
 I2 (Item 1162): μ = 3.737722
 
 ======================================================================
-Phase 1: Compute MLE Covariance Matrix
+Phase 1 (Point 1): Generate MLE Covariance Matrix
 ======================================================================
 
-Computing MLE covariance matrix...
-Building user-item centered rating structure...
-Number of users with ratings: 147,914
-Number of items: 11,123
-Computing MLE covariance matrix (11123 x 11123)...
-  Processed 50,000 users...
-  Processed 100,000 users...
-MLE Covariance matrix computation complete!
-
-[Saving MLE covariance matrix...]
-Saved to results folder.
+[Loading cached MLE covariance matrix...]
+Loaded from cache.
 
 --- MLE Covariance Matrix Shape ---
 Shape: (11123, 11123)
@@ -37,7 +28,7 @@ Var(I2): 0.636872
 Cov(I1, I2): 0.134281
 
 ======================================================================
-Phase 2: Eigen Decomposition
+Phase 2 (Point 2): Eigen Decomposition + Top Peers
 ======================================================================
 
 Computing eigenvalues and eigenvectors...
@@ -86,17 +77,17 @@ Shape: (11123, 11123)
 [Saved] mle_covariance_after_top10.csv
 
 ======================================================================
-Phase 3: Dimensionality Reduction - Calculate User Scores
+Phase 3 (Point 3 & 5): Reduced Dimensional Space
 ======================================================================
 Total users to project: 147,914
 Building user-item rating lookup...
 
-Projecting users using Top-5 PCs...
+Projecting users using Top-5 PCs (Point 3)...
   Projected 50,000 users...
   Projected 100,000 users...
 Projected all 147,914 users to 5-dimensional space.
 
-Projecting users using Top-10 PCs...
+Projecting users using Top-10 PCs (Point 5)...
   Projected 50,000 users...
   Projected 100,000 users...
 Projected all 147,914 users to 10-dimensional space.
@@ -119,10 +110,10 @@ Target User U3 (User 16157):
   5.55760746  5.34869295 -8.80298775 -8.86300383]
 
 ======================================================================
-Phase 4: Prediction via Reconstruction
+Phase 4 (Point 4 & 6): Rating Predictions
 ======================================================================
 
-=== Predictions Using Top-5 PCs ===
+=== Predictions Using Top-5 PCs (Point 4) ===
 
 --- Target User U1 (User 134471) ---
 
@@ -166,7 +157,7 @@ Phase 4: Prediction via Reconstruction
     Actual Rating: 3.74 (item mean)
     Error: 0.07
 
-=== Predictions Using Top-10 PCs ===
+=== Predictions Using Top-10 PCs (Point 6) ===
 
 --- Target User U1 (User 134471) ---
 
@@ -229,7 +220,7 @@ Top-10 PCs   U1       I1       3.69         3.69            item_mean    0.0
 Top-10 PCs   U1       I2       3.74         3.74            item_mean    0.0
 Top-10 PCs   U2       I1       3.66         3.69            item_mean    0.03
 Top-10 PCs   U2       I2       3.71         3.74            item_mean    0.03
-Top-10 PCs   U3       I1       3.7          3.69            item_mean    0.0       
+Top-10 PCs   U3       I1       3.7          3.69            item_mean    0.0
 Top-10 PCs   U3       I2       3.75         3.74            item_mean    0.02
 
 ======================================================================

@@ -16,30 +16,34 @@ This document provides a comprehensive analysis of the `pca_mean_filling.py` imp
 
 ## Implementation Steps
 
-### Step 1-2: Data Loading
+### Step 0: Data Loading (Preparation)
 - Loads user/item average ratings and target users/items
 - r_u shape: (147,914 x 2)
 - r_i shape: (11,123 x 2)
 
-### Step 3: Mean-Filling
-- Creates user-item matrix for target items
+### Step 1 & 2: Calculate Average + Mean-Filling
+- Calculates average rating for I1 and I2
+- Mean-fills missing ratings with item column mean
 - Missing values: 3,991 (49.08%)
-- Fills missing with item column mean
 - I1 mean: 3.69, I2 mean: 3.74
 
-### Step 4-5: Centered Ratings
+### Step 3: Average Rating for Each Item
+- Uses pre-computed item means from r_i
+
+### Step 4: Centered Ratings
 - Computes (rating - item_mean) for all 2,149,655 ratings
 
-### Step 6: Covariance Matrix
-- 11,123 x 11,123 matrix
+### Step 5 & 6: Covariance Matrix
+- Computes covariance for each two items
+- Generates 11,123 x 11,123 matrix
 - Memory-efficient: only users who rated BOTH items contribute
 - Divides by N-1 (sample covariance)
 
-### Step 7: PCA Eigendecomposition
+### Step 7: PCA Eigendecomposition + Top Peers
 - Computes eigenvalues/eigenvectors
 - Top-5 PCs explain 1.37% variance
 - Top-10 PCs explain 2.30% variance
-- Identifies top peers for I1 and I2
+- Identifies top 5/10 peers for I1 and I2
 
 ### Step 8 & 10: User Projection
 - Projects users to 5D and 10D latent space
@@ -51,6 +55,7 @@ This document provides a comprehensive analysis of the `pca_mean_filling.py` imp
 - Predicts ratings for target users on target items
 
 ---
+
 
 ## Step 9 vs Step 11 Comparison
 

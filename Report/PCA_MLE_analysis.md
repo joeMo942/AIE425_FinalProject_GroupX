@@ -15,7 +15,13 @@ This document provides a comprehensive analysis of the `pca_mle.py` implementati
 
 ## Implementation Phases
 
-### Phase 1: MLE Covariance Matrix
+### Phase 0: Data Loading & Item Mean Calculation (Preparation)
+- Loads item average ratings and target users/items
+- Creates item means dictionary
+
+---
+
+### Phase 1 (Point 1): Generate MLE Covariance Matrix
 
 **Key Difference from Mean-Filling:**
 - Divides by `|Common(i,j)| - 1` (number of users who rated BOTH items minus 1)
@@ -25,7 +31,7 @@ This document provides a comprehensive analysis of the `pca_mle.py` implementati
 
 ---
 
-### Phase 2: Eigen Decomposition
+### Phase 2 (Point 2): Eigen Decomposition + Top Peers
 
 Computes eigenvalues and eigenvectors of the MLE covariance matrix.
 
@@ -33,23 +39,30 @@ Computes eigenvalues and eigenvectors of the MLE covariance matrix.
 - W_top5: (11,123 × 5)
 - W_top10: (11,123 × 10)
 
+**Top Peers:** Determines top 5 and top 10 peers for I1 and I2
+
 ---
 
-### Phase 3: Dimensionality Reduction
+### Phase 3 (Point 3 & 5): Reduced Dimensional Space
 
 Projects users into reduced latent space:
 
 **Formula:** `t_{u,p} = Σ_{j in Observed(u)} (R_{u,j} - μ_j) × W_{j,p}`
 
-Projects all 147,914 users to 5D and 10D space.
+- **Point 3:** Projects users to 5D space (Top-5 PCs)
+- **Point 5:** Projects users to 10D space (Top-10 PCs)
 
 ---
 
-### Phase 4: Prediction via Reconstruction
+### Phase 4 (Point 4 & 6): Rating Predictions
 
 **Formula:** `r_hat_{u,i} = μ_i + Σ_{p=1}^k (t_{u,p} × W_{i,p})`
 
+- **Point 4:** Predictions using Top-5 PCs
+- **Point 6:** Predictions using Top-10 PCs
+
 ---
+
 
 ## Terminal Results
 

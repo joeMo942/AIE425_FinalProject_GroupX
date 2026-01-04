@@ -8,7 +8,7 @@ RESULTS_DIR = os.path.join(CODE_DIR, '..', 'results')
 PLOTS_DIR = os.path.join(CODE_DIR, '..', 'plots')
 
 # =============================================================================
-# Step 1: Load r_u (user average ratings) and r_i (item average ratings)
+# Step 0: Data Loading (Preparation)
 # =============================================================================
 
 from utils import (get_user_avg_ratings, get_item_avg_ratings, 
@@ -32,7 +32,7 @@ print(f"Shape: {r_i.shape}")
 
 
 # =============================================================================
-# Step 2: Load target users and target items
+# Step 0 (continued): Load target users and target items
 # =============================================================================
 
 # Load target users
@@ -48,7 +48,7 @@ print(target_items)
 
 
 # =============================================================================
-# Step 3: Mean-Filling Method - Replace missing ratings with column means
+# Step 1 & 2: Calculate average rating for I1/I2 + Mean-Filling Method
 # =============================================================================
 
 # Load the preprocessed dataset
@@ -97,11 +97,11 @@ print(rating_matrix_filled.head(10))
 
 
 # =============================================================================
-# Step 4: Calculate average rating for each item (using r_i)
+# Step 3: Calculate average rating for each item (using r_i)
 # =============================================================================
 
 print("\n" + "="*70)
-print("Step 4: Calculate Average Rating for Each Item")
+print("Step 3: Calculate Average Rating for Each Item")
 print("="*70)
 
 # We already have r_i loaded, which contains item means
@@ -114,11 +114,11 @@ for i, item_id in enumerate(target_items, 1):
 
 
 # =============================================================================
-# Step 5: Calculate centered ratings (actual - mean) for ALL items
+# Step 4: Calculate centered ratings (actual - mean) for ALL items
 # =============================================================================
 
 print("\n" + "="*70)
-print("Step 5: Calculate Centered Ratings (actual - mean) for ALL Items")
+print("Step 4: Calculate Centered Ratings (actual - mean) for ALL Items")
 print("="*70)
 
 from utils import compute_centered_ratings
@@ -136,11 +136,11 @@ print(df_centered_targets.head(10))
 
 
 
-# Step 6: Compute Covariance Matrix for ALL Items (Memory-Efficient)
+# Step 5 & 6: Compute Covariance Matrix for ALL Items (Memory-Efficient)
 # =============================================================================
 
 print("\n" + "="*70)
-print("Step 6: Compute Covariance Matrix for ALL Items")
+print("Step 5 & 6: Compute Covariance Matrix for ALL Items")
 print("="*70)
 
 from utils import compute_covariance_matrix_efficient
@@ -177,7 +177,7 @@ print("\n--- Sample of Covariance Matrix (first 5x5) ---")
 print(cov_matrix.iloc[:5, :5])
 
 # Save Step 6 results
-print("\n[Saving Step 6 results...]")
+print("\n[Saving Step 5 & 6 results...]")
 cov_matrix.to_csv(os.path.join(RESULTS_DIR, 'meanfill_covariance_matrix.csv'))
 print(f"Saved full covariance matrix ({len(all_items)}x{len(all_items)}) to results folder.")
 

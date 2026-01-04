@@ -10,7 +10,7 @@ CODE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(CODE_DIR, '..', 'results')
 
 # =============================================================================
-# Step 1: Load Data and Calculate Item Means
+# Phase 0: Data Loading & Item Mean Calculation
 # =============================================================================
 
 from utils import (get_user_avg_ratings, get_item_avg_ratings, 
@@ -50,11 +50,11 @@ for i, item_id in enumerate(target_items, 1):
     print(f"I{i} (Item {item_id}): μ = {item_means_dict[item_id]:.6f}")
 
 # =============================================================================
-# Phase 1: Compute MLE Covariance Matrix
+# Phase 1 (Point 1): Generate MLE Covariance Matrix
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("Phase 1: Compute MLE Covariance Matrix")
+print("Phase 1 (Point 1): Generate MLE Covariance Matrix")
 print("=" * 70)
 
 
@@ -86,11 +86,11 @@ print(f"Var(I2): {cov_matrix_mle.loc[target_items[1], target_items[1]]:.6f}")
 print(f"Cov(I1, I2): {cov_matrix_mle.loc[target_items[0], target_items[1]]:.6f}")
 
 # =============================================================================
-# Phase 2: Eigen Decomposition
+# Phase 2 (Point 2): Eigen Decomposition + Top Peers
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("Phase 2: Eigen Decomposition")
+print("Phase 2 (Point 2): Eigen Decomposition + Top Peers")
 print("=" * 70)
 
 # Convert to numpy array
@@ -188,11 +188,11 @@ cov_reconstructed_10_df.to_csv(os.path.join(RESULTS_DIR, 'mle_covariance_after_t
 print("[Saved] mle_covariance_after_top10.csv")
 
 # =============================================================================
-# Phase 3: Dimensionality Reduction - Project Users
+# Phase 3 (Point 3 & 5): Reduced Dimensional Space
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("Phase 3: Dimensionality Reduction - Calculate User Scores")
+print("Phase 3 (Point 3 & 5): Reduced Dimensional Space")
 print("=" * 70)
 
 
@@ -207,8 +207,8 @@ user_ratings = df.groupby('user').apply(
     lambda x: dict(zip(x['item'], x['rating']))
 ).to_dict()
 
-# Project all users using Top-5 PCs
-print("\nProjecting users using Top-5 PCs...")
+# Point 3: Reduced dimensional space using Top-5 peers
+print("\nProjecting users using Top-5 PCs (Point 3)...")
 user_scores_top5 = {}
 for i, user_id in enumerate(all_users):
     user_scores_top5[user_id] = project_user(
@@ -218,8 +218,8 @@ for i, user_id in enumerate(all_users):
         print(f"  Projected {i+1:,} users...")
 print(f"Projected all {len(all_users):,} users to 5-dimensional space.")
 
-# Project all users using Top-10 PCs
-print("\nProjecting users using Top-10 PCs...")
+# Point 5: Reduced dimensional space using Top-10 peers
+print("\nProjecting users using Top-10 PCs (Point 5)...")
 user_scores_top10 = {}
 for i, user_id in enumerate(all_users):
     user_scores_top10[user_id] = project_user(
@@ -237,20 +237,20 @@ for i, user_id in enumerate(target_users, 1):
     print(f"  Top-10 Scores: {user_scores_top10[user_id]}")
 
 # =============================================================================
-# Phase 4: Prediction via Reconstruction
+# Phase 4 (Point 4 & 6): Rating Predictions
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("Phase 4: Prediction via Reconstruction")
+print("Phase 4 (Point 4 & 6): Rating Predictions")
 print("=" * 70)
 
 
 
 prediction_results = []
 
-for k_value, user_scores, W, label in [(5, user_scores_top5, W_top5, "Top-5 PCs"), 
-                                         (10, user_scores_top10, W_top10, "Top-10 PCs")]:
-    print(f"\n=== Predictions Using {label} ===")
+for k_value, user_scores, W, label, point_num in [(5, user_scores_top5, W_top5, "Top-5 PCs", 4), 
+                                                     (10, user_scores_top10, W_top10, "Top-10 PCs", 6)]:
+    print(f"\n=== Predictions Using {label} (Point {point_num}) ===")
     
     for u_idx, target_user in enumerate(target_users, 1):
         print(f"\n--- Target User U{u_idx} (User {target_user}) ---")
