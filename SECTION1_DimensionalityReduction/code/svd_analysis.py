@@ -143,11 +143,16 @@ def load_full_sparse_matrix():
     Load the FULL dataset as a sparse matrix (no sampling).
     Uses scipy.sparse.csr_matrix for memory efficiency.
     
+    NOTE: Does NOT fill missing values - keeps matrix sparse.
+    Uses mean-centered approach for SVD.
+    
     Returns:
-        scipy.sparse.csr_matrix: Sparse ratings matrix
+        scipy.sparse.csr_matrix: Sparse ratings matrix (mean-centered)
         np.ndarray: User IDs
         np.ndarray: Item IDs
-        np.ndarray: Item averages for filling
+        float: Global mean
+        dict: User to index mapping
+        dict: Item to index mapping
     """
     print("\n" + "=" * 60)
     print("LOADING FULL SPARSE MATRIX")
@@ -159,6 +164,10 @@ def load_full_sparse_matrix():
     print(f"        Users: {df['user'].nunique():,}")
     print(f"        Items: {df['item'].nunique():,}")
     
+    # Calculate global mean
+    global_mean = df['rating'].mean()
+    print(f"        Global mean rating: {global_mean:.4f}")
+    
     # Create user and item mappings
     unique_users = df['user'].unique()
     unique_items = df['item'].unique()
@@ -166,11 +175,15 @@ def load_full_sparse_matrix():
     user_to_idx = {user: idx for idx, user in enumerate(unique_users)}
     item_to_idx = {item: idx for idx, item in enumerate(unique_items)}
     
-    # Create sparse matrix
-    print("\n[BUILD] Creating sparse matrix...")
+    # Calculate item averages for fallback prediction
+    item_means = df.groupby('item')['rating'].mean().to_dict()
+    user_means = df.groupby('user')['rating'].mean().to_dict()
+    
+    # Create sparse matrix with MEAN-CENTERED ratings
+    print("\n[BUILD] Creating mean-centered sparse matrix...")
     rows = df['user'].map(user_to_idx).values
     cols = df['item'].map(item_to_idx).values
-    data = df['rating'].values
+    data = df['rating'].values - global_mean  # Mean-center
     
     sparse_matrix = csr_matrix(
         (data, (rows, cols)),
@@ -181,57 +194,33 @@ def load_full_sparse_matrix():
     print(f"        Matrix shape: {sparse_matrix.shape[0]:,} x {sparse_matrix.shape[1]:,}")
     print(f"        Non-zero entries: {sparse_matrix.nnz:,}")
     print(f"        Sparsity: {100 - (sparse_matrix.nnz / (sparse_matrix.shape[0] * sparse_matrix.shape[1]) * 100):.2f}%")
-    
-    # Calculate item averages for mean-centering
-    print("\n[CALC] Calculating item averages...")
-    item_sums = np.array(sparse_matrix.sum(axis=0)).flatten()
-    item_counts = np.array((sparse_matrix != 0).sum(axis=0)).flatten()
-    item_averages = np.divide(item_sums, item_counts, where=item_counts != 0, out=np.full_like(item_sums, 3.0))
-    
-    # Create dense version with mean filling for SVD
-    print("\n[FILL] Applying item mean filling to dense matrix...")
-    print("        (This may take a moment for large matrices...)")
-    
-    # Convert to dense and fill missing values
-    dense_matrix = sparse_matrix.toarray()
-    
-    # Fill zeros (missing ratings) with item averages
-    for j in range(dense_matrix.shape[1]):
-        mask = dense_matrix[:, j] == 0
-        dense_matrix[mask, j] = item_averages[j]
-    
-    print(f"        [OK] Dense matrix created: {dense_matrix.shape}")
+    print(f"        Memory: ~{sparse_matrix.data.nbytes / 1024 / 1024:.1f} MB (sparse)")
     
     # Clean up
     del df
     gc.collect()
     
-    return dense_matrix, unique_users, unique_items, item_averages, user_to_idx, item_to_idx
+    return sparse_matrix, unique_users, unique_items, global_mean, user_to_idx, item_to_idx, item_means
 
 
-def compute_sparse_truncated_svd(matrix, k=100):
+def compute_sparse_truncated_svd(sparse_matrix, k=100):
     """
     Compute truncated SVD using scipy.sparse.linalg.svds.
-    This is more memory efficient for large matrices.
+    This is memory efficient for large sparse matrices.
     
     Args:
-        matrix: Dense or sparse matrix
+        sparse_matrix: scipy.sparse matrix (CSR format)
         k: Number of singular values to compute
         
     Returns:
         U_k, sigma_k, Vt_k: Truncated SVD components (in DESCENDING order)
     """
     print(f"\n[SPARSE SVD] Computing truncated SVD with k={k}...")
-    print(f"        Matrix shape: {matrix.shape}")
-    
-    # Convert to sparse if dense
-    if not hasattr(matrix, 'toarray'):
-        sparse_mat = csr_matrix(matrix)
-    else:
-        sparse_mat = matrix
+    print(f"        Matrix shape: {sparse_matrix.shape}")
+    print(f"        Computing top {k} singular values only...")
     
     # svds returns singular values in ASCENDING order
-    U_k, sigma_k, Vt_k = svds(sparse_mat, k=k)
+    U_k, sigma_k, Vt_k = svds(sparse_matrix, k=k)
     
     # Reverse to get DESCENDING order (like np.linalg.svd)
     U_k = U_k[:, ::-1]
@@ -242,6 +231,7 @@ def compute_sparse_truncated_svd(matrix, k=100):
     print(f"        Sigma_k shape: {sigma_k.shape}")
     print(f"        Vt_k shape: {Vt_k.shape}")
     print(f"        Top singular values: {sigma_k[:5]}")
+    print(f"        [OK] Sparse SVD complete!")
     
     return U_k, sigma_k, Vt_k
 
@@ -2234,8 +2224,8 @@ def visualize_cold_start_analysis(cold_start_results, warm_start_results, mitiga
     mae_vals = [mitigation_results[s]['MAE'] for s in strategies]
     
     colors = ['red' if s == 'baseline_svd' else 
-              ('green' if s == mitigation_results['best_strategy'] else 'steelblue') 
-              for s in strategies]
+            ('green' if s == mitigation_results['best_strategy'] else 'steelblue') 
+            for s in strategies]
     
     bars = ax3.bar(range(len(strategies)), mae_vals, color=colors, alpha=0.8)
     ax3.set_xlabel('Strategy', fontsize=11)
@@ -2377,24 +2367,34 @@ def main():
     print("\n[INFO] Loading full dataset for truncated SVD...")
     print("       This allows comparison with Assignment 1 CF on same data.\n")
     
-    # Load FULL dataset
-    full_matrix, user_ids, item_ids, item_averages, user_to_idx, item_to_idx = load_full_sparse_matrix()
+    # Load FULL dataset (mean-centered sparse matrix)
+    sparse_matrix, user_ids, item_ids, global_mean, user_to_idx, item_to_idx, item_means = load_full_sparse_matrix()
     
     # Compute truncated SVD with optimal k (we'll use k=100 based on sampled analysis)
     optimal_k = 100  # Based on elbow analysis from sampled data
     
-    U, sigma, Vt = compute_sparse_truncated_svd(full_matrix, k=optimal_k)
+    U, sigma, Vt = compute_sparse_truncated_svd(sparse_matrix, k=optimal_k)
     V = Vt.T
     
-    # Calculate reconstruction error for truncated SVD on sampled portion
+    # Note: Skip dense reconstruction error calculation due to memory constraints
     print("\n[EVAL] Evaluating truncated SVD approximation...")
-    R_hat = (U * sigma) @ Vt
-    error = full_matrix - R_hat
-    mae = np.mean(np.abs(error))
-    rmse = np.sqrt(np.mean(error ** 2))
-    print(f"        Truncated SVD (k={optimal_k}) on full data:")
-    print(f"          MAE: {mae:.4f}")
-    print(f"          RMSE: {rmse:.4f}")
+    print(f"        Truncated SVD (k={optimal_k}) on full data ({len(user_ids):,} users)")
+    print(f"        Global mean: {global_mean:.4f}")
+    print(f"        Note: Using mean-centered SVD approach")
+    
+    # Sample some predictions for error estimation
+    sample_indices = np.random.choice(sparse_matrix.nnz, min(10000, sparse_matrix.nnz), replace=False)
+    sample_rows, sample_cols = sparse_matrix.nonzero()
+    sample_actual = np.array(sparse_matrix[sample_rows[sample_indices], sample_cols[sample_indices]]).flatten()
+    
+    # Predict for sample
+    sample_pred = np.array([np.dot(U[sample_rows[i], :] * sigma, V[sample_cols[i], :]) 
+                            for i in sample_indices])
+    
+    mae = np.mean(np.abs(sample_actual - sample_pred))
+    rmse = np.sqrt(np.mean((sample_actual - sample_pred) ** 2))
+    print(f"        Sample MAE (on mean-centered ratings): {mae:.4f}")
+    print(f"        Sample RMSE: {rmse:.4f}")
     
     # Create error_df for compatibility
     error_df = pd.DataFrame([{
@@ -2419,9 +2419,10 @@ def main():
     print(f"        Target users: {target_users}")
     print(f"        Target items: {target_items}")
     
-    # Make predictions
+    # Make predictions using mean-centered approach
     predictions = []
     print(f"\n[PREDICT] Using k={optimal_k} latent factors for prediction...")
+    print(f"          (Mean-centered: adding global mean {global_mean:.4f} back)")
     
     for user_id in target_users:
         for item_id in target_items:
@@ -2439,8 +2440,8 @@ def main():
             u = U[user_idx, :]
             v = V[item_idx, :]
             
-            # Predict: r_hat = u^T @ diag(sigma) @ v = (u * sigma) dot v
-            raw_pred = np.dot(u * sigma, v)
+            # Predict: r_hat = global_mean + u^T @ diag(sigma) @ v
+            raw_pred = np.dot(u * sigma, v) + global_mean  # Add back global mean
             clipped_pred = np.clip(raw_pred, 1.0, 5.0)
             
             predictions.append({
@@ -2477,15 +2478,13 @@ def main():
     # 6.1-6.2 Analyze top-3 latent factors
     latent_factor_results = analyze_latent_factors(U, V, sigma, user_ids, item_ids)
     
-    # 6.3 Visualize latent space (create sparse ratings matrix for color coding)
-    # Create a pandas DataFrame from full_matrix for compatibility
-    original_ratings_matrix = pd.DataFrame(
-        full_matrix, 
-        index=user_ids, 
-        columns=item_ids
-    )
+    # 6.3 Visualize latent space
+    # Create a pandas DataFrame from sparse matrix for color coding (add global mean back)
+    print("\n[PLOT] Creating latent space visualizations using sampled data...")
     
-    visualize_latent_space(U, V, sigma, user_ids, item_ids, original_ratings_matrix)
+    # Load sampled data for visualization (full matrix too large)
+    ratings_matrix_vis, user_ids_vis, item_ids_vis = load_ratings_matrix(max_users=5000, max_items=2000)
+    visualize_latent_space(U[:5000, :], V[:2000, :], sigma, user_ids_vis, item_ids_vis, ratings_matrix_vis)
     
     # =========================================================================
     # 7. SENSITIVITY ANALYSIS (using sampled data for efficiency)
@@ -2518,25 +2517,32 @@ def main():
     gc.collect()
     
     # =========================================================================
-    # 8. COLD-START ANALYSIS WITH SVD (on full dataset)
+    # 8. COLD-START ANALYSIS WITH SVD (using sampled data)
     # =========================================================================
     
+    # Load sampled data for cold-start analysis
+    print("\n[NOTE] Cold-start analysis uses sampled data for efficiency...")
+    ratings_matrix_cold, user_ids_cold, item_ids_cold = load_ratings_matrix(max_users=5000, max_items=2000)
+    
     # 8.1 Simulate cold-start users
-    cold_start_data = simulate_cold_start_users(original_ratings_matrix)
+    cold_start_data = simulate_cold_start_users(ratings_matrix_cold)
+    
+    # Use sampled U and V for cold-start
+    V_cold = V[:2000, :]
     
     # 8.2-8.3 Evaluate cold-start performance
     cold_start_results = evaluate_cold_start_performance(
-        cold_start_data, V, sigma, item_ids, optimal_k
+        cold_start_data, V_cold, sigma, item_ids_cold, optimal_k
     )
     
     # 8.3 Compare with warm-start
     warm_start_results = compare_with_warm_start(
-        original_ratings_matrix, V, sigma, item_ids, optimal_k
+        ratings_matrix_cold, V_cold, sigma, item_ids_cold, optimal_k
     )
     
     # 8.4 Test mitigation strategies
     mitigation_results = test_mitigation_strategies(
-        cold_start_data, V, sigma, item_ids, original_ratings_matrix, optimal_k
+        cold_start_data, V_cold, sigma, item_ids_cold, ratings_matrix_cold, optimal_k
     )
     
     # Visualize and save results
@@ -2547,7 +2553,7 @@ def main():
     print_cold_start_summary(cold_start_results, warm_start_results, mitigation_results)
     
     # Clean up
-    del original_ratings_matrix
+    del ratings_matrix_cold, sparse_matrix
     gc.collect()
     
     return {
@@ -2559,8 +2565,7 @@ def main():
         'user_ids': user_ids,
         'item_ids': item_ids,
         'ortho_results': ortho_results,
-        'filled_matrix': filled_matrix,
-        'approximations': approximations,
+        'global_mean': global_mean,
         'error_df': error_df,
         'optimal_k': optimal_k,
         'predictions_df': predictions_df,
