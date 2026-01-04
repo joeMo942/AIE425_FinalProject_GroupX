@@ -37,9 +37,15 @@ if dfs:
     # 2. Filter for Validity
     valid_df = combined_df.dropna(subset=cols_to_check)
     
+    # 3. Filter for Lifetime Validity (Ignore Avg Viewers, Duration, Active Days, Rank)
+    # Check only: TOTAL_FOLLOWERS, TOTAL_TIME_STREAMED, TOTAL_GAMES_STREAMED, NAME
+    lifetime_cols = ['NAME', 'TOTAL_FOLLOWERS', "MOST_STREAMED_GAME",'TOTAL_TIME_STREAMED', 'TOTAL_GAMES_STREAMED']
+    valid_lifetime_df = combined_df.dropna(subset=lifetime_cols)
+    
     print("\n--------------------------------")
     print(f"Total Combined Streamers: {len(combined_df)}")
-    print(f"Total VALID Streamers (Ignoring Rank): {len(valid_df)}")
+    print(f"STRICT Valid (All stats except Rank): {len(valid_df)}")
+    print(f"LIFETIME Valid (Has Followers/Time/Games): {len(valid_lifetime_df)}")
     print("--------------------------------")
     
     # Check how many from the rescrape (684 target) are now valid
