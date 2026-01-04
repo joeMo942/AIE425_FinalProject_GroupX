@@ -28,7 +28,7 @@ load_dotenv("/home/yousef/AIE425_FinalProject_GroupX/.env")
 DATA_DIR = Path(__file__).parent.parent / "data"
 RESULTS_DIR = Path(__file__).parent.parent / "results"
 
-ITEMS_FILE = DATA_DIR / "final_items.csv"
+ITEMS_FILE = DATA_DIR / "streamer_metadata.csv"
 OUTPUT_FILE = DATA_DIR / "game_metadata.csv"
 CHECKPOINT_FILE = DATA_DIR / "igdb_checkpoint.json"
 
@@ -169,12 +169,12 @@ def fetch_all_games():
     # Load items
     df_items = pd.read_csv(ITEMS_FILE)
     
-    # Get unique games from 1st_game and 2nd_game columns
+    # Get unique games from MOST_STREAMED_GAME and 2ND_MOST_STREAMED_GAME columns
     games = set()
-    if '1st_game' in df_items.columns:
-        games.update(df_items['1st_game'].dropna().unique())
-    if '2nd_game' in df_items.columns:
-        games.update(df_items['2nd_game'].dropna().unique())
+    if 'MOST_STREAMED_GAME' in df_items.columns:
+        games.update(df_items['MOST_STREAMED_GAME'].dropna().unique())
+    if '2ND_MOST_STREAMED_GAME' in df_items.columns:
+        games.update(df_items['2ND_MOST_STREAMED_GAME'].dropna().unique())
     
     # Remove empty strings
     games = [g for g in games if g and len(str(g).strip()) > 0]
@@ -250,8 +250,8 @@ def enrich_items_with_game_data():
     def enrich_text(row):
         base_text = str(row['text_features']) if pd.notna(row['text_features']) else ''
         
-        game1_text = game_lookup.get(row.get('1st_game', ''), '')
-        game2_text = game_lookup.get(row.get('2nd_game', ''), '')
+        game1_text = game_lookup.get(row.get('MOST_STREAMED_GAME', ''), '')
+        game2_text = game_lookup.get(row.get('2ND_MOST_STREAMED_GAME', ''), '')
         
         enriched = f"{base_text} {game1_text} {game2_text}".strip()
         return enriched
@@ -285,7 +285,7 @@ def main():
     fetch_all_games()
     
     # Enrich items
-    enrich_items_with_game_data()
+    # enrich_items_with_game_data()
     
     print("\n" + "=" * 60)
     print("[DONE] IGDB data fetch complete!")

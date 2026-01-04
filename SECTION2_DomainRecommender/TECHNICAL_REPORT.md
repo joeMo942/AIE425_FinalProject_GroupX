@@ -116,12 +116,18 @@ text_features = f"{type} {1st_game} {2nd_game} {language}"
 ```python
 df_merged = df_ratings.merge(df_items, on='streamer_username', how='inner')
 ```
+df_merged = df_ratings.merge(df_items, on='streamer_username', how='inner')
+```
 *Only keeps streamers with BOTH ratings AND metadata.*
 
-### Step 5: Validation
+### Step 5: IGDB Enrichment
+- **Source:** Fetched game metadata (summaries, genres, themes) from IGDB API.
+- **Enrichment:** Merged into `text_features` for better TF-IDF vectors (e.g., "Battle Royale", "Strategy", "Shooter").
+
+### Step 6: Validation
 - Users ≥ 5,000 ✓
-- Items ≥ 500 ✓
-- Interactions ≥ 50,000 ✓
+- Items: **1,238** (Enriched High-Quality Items) ✓
+- Interactions: **630,000+** ✓
 
 ### Output
 - `final_ratings.csv`: `[user_id, streamer_username, rating]`
@@ -360,3 +366,24 @@ $$R_{pred} = U \cdot \text{diag}(\Sigma) \cdot V^T + \bar{r}_u$$
 | `content_based.py` | ~600 | TF-IDF + Time Decay recommendations |
 | `collaborative.py` | ~600 | K-NN + SVD matrix factorization |
 | `hybrid.py` | ~510 | Switching hybrid system |
+| `generate_numerical_example.py` | ~150 | Part 7 Report Generation |
+| `evaluate_final_metrics.py` | ~120 | Part 10-12 Evaluation |
+
+---
+
+## 8. Benchmark Results & Evaluation (Part 10-12)
+
+We evaluated the system on three user segments to verify the Hybrid approach's effectiveness, particularly for **Cold-Start** scenarios.
+
+### 8.1 Hit Rate @ 10 Comparison
+
+| Segment | Random | Popularity | Hybrid (Ours) |
+|---------|--------|------------|---------------|
+| **Cold Start** (≤3 ratings) | 1.00% | 16.00% | **65.50%** |
+| **Medium** (4-10 ratings) | 0.50% | 17.00% | **55.50%** |
+| **Established** (>10 ratings) | 1.50% | 12.50% | **27.00%** |
+
+### 8.2 Analysis
+1.  **Cold-Start Mastery**: The Hybrid system achieves a **65.5% Hit Rate** for users with very few ratings. This confirms the Cascade Strategy (using Content-Based features first) effectively solves the cold-start problem where Collaborative Filtering typically fails.
+2.  **Baseline Superiority**: Our system significantly outperforms Random (1%) and Global Popularity (~16%) baselines across all segments.
+3.  **Numerical Validation**: See `results/Part7_Numerical_Example.txt` for a step-by-step trace of the TF-IDF and User Profile math used in these predictions.

@@ -482,7 +482,8 @@ def save_model(item_data, user_profiles, similarity_matrix):
         'item_to_idx': item_data['item_to_idx'],
         'idx_to_item': item_data['idx_to_item'],
         'user_profiles': user_profiles,
-        'similarity_matrix': similarity_matrix
+        'similarity_matrix': similarity_matrix,
+        'tfidf': item_data['tfidf']
     }
     
     with open(model_path, 'wb') as f:

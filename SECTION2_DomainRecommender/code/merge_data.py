@@ -26,10 +26,11 @@ RESULTS_DIR.mkdir(exist_ok=True)
 RATINGS_FILE = DATA_DIR / "processed_ratings.csv"
 ARCHIVE_FILE = DATA_DIR / "datasetV2.csv"
 SCRAPED_FILE = DATA_DIR / "streamer_metadata.csv"
+GAME_METADATA_FILE = DATA_DIR / "game_metadata.csv"
 
 # Output files
 FINAL_RATINGS = DATA_DIR / "final_ratings.csv"
-FINAL_ITEMS = DATA_DIR / "final_items.csv"
+FINAL_ITEMS = DATA_DIR / "final_items_enriched.csv"
 
 
 def load_and_prepare_archive_data() -> pd.DataFrame:
@@ -85,18 +86,51 @@ def load_and_prepare_scraped_data() -> pd.DataFrame:
     df = pd.read_csv(SCRAPED_FILE)
     print(f"[LOADED] {SCRAPED_FILE.name}: {len(df)} streamers")
     
+    
+    # Rename columns to match internal standard
+    df = df.rename(columns={
+        'NAME': 'streamer_username',
+        'LANGUAGE': 'language',
+        'MOST_STREAMED_GAME': '1st_game',
+        '2ND_MOST_STREAMED_GAME': '2nd_game',
+        'RANK': 'rank',
+        'AVG_VIEWERS_PER_STREAM': 'avg_viewers',
+        'TOTAL_FOLLOWERS': 'followers',
+        'TOTAL_TIME_STREAMED': 'hours_streamed',
+    })
+
     # Clean username
-    df['streamer_username'] = df['streamer_username'].str.lower().str.strip()
+    df['streamer_username'] = df['streamer_username'].astype(str).str.lower().str.strip()
+
+    # Load Game Metadata for enrichment
+    game_lookup = {}
+    if GAME_METADATA_FILE.exists():
+        print(f"[ENRICH] Loading game metadata from {GAME_METADATA_FILE.name}")
+        df_games = pd.read_csv(GAME_METADATA_FILE)
+        # Create lookup: game_name -> summary + genres + themes
+        for _, row in df_games.iterrows():
+            gname = str(row['game_name']).strip()
+            # mix of summary, genres, themes, keywords
+            desc = f"{row['summary']} {row['genres']} {row['themes']} {row['keywords']}"
+            game_lookup[gname] = str(desc).replace('nan', '').strip()
     
-    # Create text features from bio and games
-    df['text_features'] = (
-        df['bio'].fillna('') + ' ' +
-        df['1st_game'].fillna('') + ' ' +
-        df['2nd_game'].fillna('') + ' ' +
-        df['language'].fillna('')
-    ).str.strip()
+    # Create text features function
+    def create_features(row):
+        # Base: Language + Games
+        base = f"{row.get('language', '')} {row.get('1st_game', '')} {row.get('2nd_game', '')}"
+        
+        # Enrich with Game descriptions
+        g1 = str(row.get('1st_game', ''))
+        g2 = str(row.get('2nd_game', ''))
+        
+        enrich1 = game_lookup.get(g1, '')
+        enrich2 = game_lookup.get(g2, '')
+        
+        return f"{base} {enrich1} {enrich2}".strip()
+
+    df['text_features'] = df.apply(create_features, axis=1)
     
-    print(f"[DONE] Prepared scraped data with text features")
+    print(f"[DONE] Prepared scraped data with IGDB enriched text features")
     
     return df
 
