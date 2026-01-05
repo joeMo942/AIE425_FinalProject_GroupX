@@ -45,7 +45,7 @@ except ImportError:
 # ============================================================================
 # Configuration
 # ============================================================================
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent
 OUTPUT_FILE = DATA_DIR / "streamer_metadata_fixed.csv"
 CHECKPOINT_FILE = DATA_DIR / "scraper_checkpoint.json"
 FAILED_FILE = DATA_DIR / "failed_streamers.txt"

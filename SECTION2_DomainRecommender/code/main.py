@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).parent.parent
 CODE_DIR = BASE_DIR / "code"
 DATA_DIR = BASE_DIR / "data"
 RESULTS_DIR = BASE_DIR / "results"
-TEMPLATES_DIR = CODE_DIR / "templates"
+TEMPLATES_DIR = DATA_DIR / "templates"
 
 # Pipeline Files
 DATA_FILES = [DATA_DIR / "final_ratings.csv", DATA_DIR / "final_items_enriched.csv"]
