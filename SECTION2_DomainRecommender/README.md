@@ -30,7 +30,7 @@ SECTION2_DomainRecommender/
 ### 0. Dataset Setup (CRITICAL)
 Before running anything, you must download the necessary dataset:
 
-1.  **Download:** [INSERT_DATASET_LINK_HERE]
+1.  **Download:** [Dataset_Link](https://drive.google.com/file/d/1--LHgVs2pa7ePYsl87AsTmLD5g2B0zFZ/view?usp=sharing)
 2.  **Extract:** Unzip the contents directly into the `data/` folder.
     *   Ensure the file `final_ratings.csv` is located at `SECTION2_DomainRecommender/data/final_ratings.csv`.
     *   Ensure the file `final_items_enriched.csv` is located at `SECTION2_DomainRecommender/data/final_items_enriched.csv`.

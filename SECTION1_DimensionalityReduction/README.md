@@ -21,6 +21,13 @@ SECTION1_DimensionalityReduction/
 
 Ensure you have the required dependencies installed. You can run each analysis script independently.
 
+### 0. Dataset Setup (CRITICAL)
+Before running the analysis, you must download the necessary dataset:
+
+1.  **Download:** [Dataset_Link](https://drive.google.com/file/d/1--LHgVs2pa7ePYsl87AsTmLD5g2B0zFZ/view?usp=sharing)
+2.  **Extract:** Unzip the contents directly into the `data/` folder.
+    *   Ensure the file `preprocessed_data.csv` is located at `SECTION1_DimensionalityReduction/data/preprocessed_data.csv`.
+
 ### 1. PCA with Mean Filling
 Imputes missing values using item averages before computing the covariance matrix and PCA.
 ```bash
