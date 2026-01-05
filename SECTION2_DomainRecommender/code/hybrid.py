@@ -35,6 +35,11 @@ ALPHA = 0.3  # Weight for content-based (lower = more weight for SVD/CF)
 TOP_N = 10
 
 
+
+# ============================================================================
+# PART 1: MODEL & DATA LOADING
+# ============================================================================
+
 def load_models():
     """Load pre-trained content-based and collaborative models."""
     print("=" * 60)
@@ -91,6 +96,11 @@ def load_data():
     df_items = pd.read_csv(ITEMS_FILE)
     return df_ratings, df_items
 
+
+
+# ============================================================================
+# PART 2: SCORING FUNCTIONS
+# ============================================================================
 
 def get_content_based_scores(user_id, models, df_ratings, all_items):
     """
@@ -250,6 +260,11 @@ def get_user_rating_count(user_id, df_ratings):
     return len(df_ratings[df_ratings['user_id'] == user_id])
 
 
+
+# ============================================================================
+# PART 3: HYBRID LOGIC (CASCADE)
+# ============================================================================
+
 def hybrid_recommend(user_id, models, df_ratings, df_items, 
                     n_recommendations=TOP_N, n_candidates=50):
     """
@@ -344,6 +359,11 @@ def hybrid_recommend(user_id, models, df_ratings, df_items,
         
         return final_scores[:n_recommendations]
 
+
+
+# ============================================================================
+# PART 4: EVALUATION
+# ============================================================================
 
 def evaluate_hybrid(df_ratings, df_items, models, n_users=100):
     """Evaluate hybrid recommendations and compare with individual systems."""
@@ -617,6 +637,11 @@ def save_recommendations(df_ratings, df_items, models, n_users=100):
     
     print(f"[SAVED] {output_path.name} ({len(df_recs):,} recommendations)")
 
+
+
+# ============================================================================
+# MAIN PIPELINE
+# ============================================================================
 
 def main():
     """Main hybrid recommendation pipeline."""

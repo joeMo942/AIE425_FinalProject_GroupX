@@ -34,7 +34,10 @@ DATA_FILES = [DATA_DIR / "final_ratings.csv", DATA_DIR / "final_items_enriched.c
 CB_MODEL = RESULTS_DIR / "content_based_model.pkl"
 CF_MODELS = [RESULTS_DIR / "collaborative_model.pkl", RESULTS_DIR / "svd_model.pkl", RESULTS_DIR / "svd_predictions.npy"]
 
+
+# ============================================================================
 # App Global State
+# ============================================================================
 app = FastAPI()
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -134,6 +137,10 @@ async def startup_event():
             
     print("Web App Ready!")
 
+
+# ============================================================================
+# FastAPI Routes
+# ============================================================================
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {
@@ -191,6 +198,10 @@ async def recommend(request: Request, selected_games: list = Form(...), language
         "recommendations": top_10
     })
 
+
+# ============================================================================
+# Main Entry Point
+# ============================================================================
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("STARTING SECTION 2 RECOMMENDER SYSTEM")
