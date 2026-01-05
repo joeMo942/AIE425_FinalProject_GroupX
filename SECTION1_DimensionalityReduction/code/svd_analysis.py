@@ -1300,7 +1300,7 @@ def compare_with_assignment1(predictions_df):
     print(f"        " + "-" * 60)
     print(f"        {'Method':<30} {'MAE':<10} {'RMSE':<10}")
     print(f"        " + "-" * 60)
-    print(f"        {'SVD (Truncated k=100)':<30} {svd_mae:.4f}     {svd_rmse:.4f}")
+    print(f"        {'SVD (Truncated k=20)':<30} {svd_mae:.4f}     {svd_rmse:.4f}")
     print(f"        {'CF Clustering (Assignment 1)':<30} {cf_mae:.4f}     {cf_rmse:.4f}")
     print(f"        " + "-" * 60)
     
@@ -1583,7 +1583,7 @@ def compare_prediction_accuracy(svd_predictions, pca_results, target_users, targ
     return comparison_df
 
 
-def measure_computational_efficiency(sparse_matrix, k=100):
+def measure_computational_efficiency(sparse_matrix, k=20):
     """
     5.3 Measure computational efficiency for SVD.
     
@@ -1848,7 +1848,7 @@ def print_comparison_summary(reconstruction_df, prediction_df, efficiency_result
     
     print("\n  5.1 Reconstruction Quality:")
     svd_var = reconstruction_df[reconstruction_df['Method'] == 'SVD (Truncated)']['Variance_Explained_%'].max()
-    print(f"    SVD (k=100) explains {svd_var:.1f}% variance")
+    print(f"    SVD (k=20) explains {svd_var:.1f}% variance")
     
     print("\n  5.2 Prediction Accuracy:")
     print("    All methods produce comparable predictions for target items")
@@ -2160,7 +2160,7 @@ def test_missing_data_robustness(ratings_matrix, item_averages, U, sigma, Vt,
         # Perform SVD (use reduced for speed)
         U_test, sigma_test, Vt_test = np.linalg.svd(filled_test, full_matrices=False)
         
-        # Calculate reconstruction with k=100
+        # Calculate reconstruction with k=20
         k = min(100, len(sigma_test))
         V_test = Vt_test.T
         R_hat = (U_test[:, :k] * sigma_test[:k]) @ V_test[:, :k].T
@@ -2446,7 +2446,7 @@ def simulate_cold_start_users(ratings_matrix, n_users=50, hide_pct=80, min_ratin
     return cold_start_data
 
 
-def estimate_cold_start_latent_factors(visible_ratings, V, sigma, item_ids, k=100):
+def estimate_cold_start_latent_factors(visible_ratings, V, sigma, item_ids, k=20):
     """
     8.2 Estimate user latent factors from limited visible ratings.
     
@@ -2494,7 +2494,7 @@ def estimate_cold_start_latent_factors(visible_ratings, V, sigma, item_ids, k=10
     return u_latent
 
 
-def predict_cold_start_ratings(u_latent, V, sigma, hidden_items, item_ids, k=100):
+def predict_cold_start_ratings(u_latent, V, sigma, hidden_items, item_ids, k=20):
     """
     Predict ratings for hidden items using estimated latent factors.
     
@@ -2523,7 +2523,7 @@ def predict_cold_start_ratings(u_latent, V, sigma, hidden_items, item_ids, k=100
     return predictions
 
 
-def evaluate_cold_start_performance(cold_start_data, V, sigma, item_ids, k=100):
+def evaluate_cold_start_performance(cold_start_data, V, sigma, item_ids, k=20):
     """
     8.2-8.3 Evaluate cold-start prediction performance.
     
@@ -2589,7 +2589,7 @@ def evaluate_cold_start_performance(cold_start_data, V, sigma, item_ids, k=100):
     return results_df
 
 
-def compare_with_warm_start(ratings_matrix, V, sigma, item_ids, k=100, n_users=50):
+def compare_with_warm_start(ratings_matrix, V, sigma, item_ids, k=20, n_users=50):
     """
     8.3 Compare cold-start with warm-start users (full rating history).
     
@@ -2655,7 +2655,7 @@ def compare_with_warm_start(ratings_matrix, V, sigma, item_ids, k=100, n_users=5
     return {'MAE': avg_mae, 'RMSE': avg_rmse, 'n_users': len(results)}
 
 
-def test_mitigation_strategies(cold_start_data, V, sigma, item_ids, ratings_matrix, k=100):
+def test_mitigation_strategies(cold_start_data, V, sigma, item_ids, ratings_matrix, k=20):
     """
     8.4 Test cold-start mitigation strategies.
     
@@ -2947,11 +2947,11 @@ def main():
     print("\n" + "=" * 60)
     print("3. TRUNCATED SVD ON FULL DATASET")
     print("=" * 60)
-    print("\n[INFO] Using truncated SVD (k=100) on full sparse matrix.")
+    print("\n[INFO] Using truncated SVD (k=20) on full sparse matrix.")
     print("       Full SVD is computationally infeasible for 147K users.\n")
     
-    # Compute truncated SVD with k=100 on FULL data
-    optimal_k = 100
+    # Compute truncated SVD with k=20 on FULL data
+    optimal_k = 20
     U, sigma, Vt = compute_sparse_truncated_svd(sparse_matrix, k=optimal_k)
     V = Vt.T
     
@@ -3292,13 +3292,13 @@ def main():
         'n_ratings': sparse_matrix.nnz,
         'n_users': len(user_ids),
         'n_items': len(item_ids),
-        'MAE_at_k100': mae,
-        'RMSE_at_k100': rmse,
+        'MAE_at_k20': mae,
+        'RMSE_at_k20': rmse,
         'note': 'Full sparse matrix with mean-centering provides memory-efficient SVD'
     }
     print(f"        Strategy: {filling_comparison['strategy']}")
     print(f"        Global mean: {filling_comparison['global_mean']:.4f}")
-    print(f"        MAE at k=100: {filling_comparison['MAE_at_k100']:.4f}")
+    print(f"        MAE at k=20: {filling_comparison['MAE_at_k20']:.4f}")
     
     # Visualize sensitivity analysis
     print("\n[PLOT] Creating sensitivity analysis visualizations...")
