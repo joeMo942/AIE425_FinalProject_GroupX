@@ -13,3 +13,13 @@ SECTION2_DomainRecommender/results/svd_predictions.npy
 !Report/SVD_terminal_output.txt
 !Report/SVD_conclusion.md
 !Report/SVD_analysis.md
+venv/
+*.csv
+__pycache__
+*.zip
+*.txt
+*.pkl
+*.png
+.env
+*.npy
+*.json
