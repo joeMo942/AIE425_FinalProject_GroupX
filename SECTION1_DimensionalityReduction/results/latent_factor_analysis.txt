@@ -3,7 +3,7 @@ Latent Factor Interpretation Analysis
 
 FACTOR 1
   Singular value: 83.1903
-  Variance explained: 3.5565%
+  Variance explained: 11.3823%
   Interpretation: Global mean effect / baseline rating tendency
 
   Top Items:
@@ -34,11 +34,11 @@ FACTOR 1
 
 FACTOR 2
   Singular value: 70.3113
-  Variance explained: 2.5406%
+  Variance explained: 8.1308%
   Interpretation: Major genre/preference dimension
 
   Top Items:
-    Item 581: 0.5619
+    Item 581: 0.5620
     Item 222: 0.2935
     Item 840: -0.1563
     Item 767: -0.1199
@@ -65,7 +65,7 @@ FACTOR 2
 
 FACTOR 3
   Singular value: 62.0103
-  Variance explained: 1.9761%
+  Variance explained: 6.3243%
   Interpretation: Fine-grained preference dimension 3
 
   Top Items:

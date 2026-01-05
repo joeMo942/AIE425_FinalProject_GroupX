@@ -2984,8 +2984,10 @@ def main():
     
     print(f"\n[VARIANCE] Cumulative variance explained:")
     print(f"        Top-10: {cumulative_variance[9]:.2f}%")
-    print(f"        Top-50: {cumulative_variance[49]:.2f}%")
-    print(f"        Top-100: {cumulative_variance[99]:.2f}%")
+    if len(cumulative_variance) > 49:
+        print(f"        Top-50: {cumulative_variance[49]:.2f}%")
+    if len(cumulative_variance) > 99:
+        print(f"        Top-100: {cumulative_variance[99]:.2f}%")
     print(f"        k for 90% variance: {n_90}")
     print(f"        k for 95% variance: {n_95}")
     print(f"        k for 99% variance: {n_99}")
@@ -3330,7 +3332,7 @@ def main():
     print("SENSITIVITY ANALYSIS SUMMARY (FULL DATASET)")
     print("=" * 60)
     print(f"\n  Dataset: {len(user_ids):,} users × {len(item_ids):,} items")
-    print(f"  Best k tested: 100 (MAE={mae:.4f}, Variance={cumulative_variance[99]:.1f}%)")
+    print(f"  Best k tested: {optimal_k} (MAE={mae:.4f}, Variance={cumulative_variance[optimal_k-1]:.1f}%)")
     print("=" * 60)
     
     # =========================================================================
